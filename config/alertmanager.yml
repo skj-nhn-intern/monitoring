@@ -1,0 +1,41 @@
+global:
+  # SMTP 등 외부 연동 시 설정
+  # smtp_smarthost: 'smtp.example.com:587'
+  # smtp_from: 'alertmanager@example.com'
+
+route:
+  group_by: ['alertname', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: dooray-warning
+
+  routes:
+    # 위험(critical) -> Dooray 중요 채널
+    - match:
+        severity: critical
+      receiver: dooray-critical
+    # 중요(warning) -> Dooray 경고 채널
+    - match:
+        severity: warning
+      receiver: dooray-warning
+
+receivers:
+  # 위험 알림 → DOORAY_HOOK_URL_CRITICAL 채널로 전송
+  - name: dooray-critical
+    webhook_configs:
+      - url: 'http://dooray-webhook-adapter:9095/webhook'
+        send_resolved: true
+
+  # 중요 알림 → DOORAY_HOOK_URL_WARNING 채널로 전송
+  - name: dooray-warning
+    webhook_configs:
+      - url: 'http://dooray-webhook-adapter:9095/webhook'
+        send_resolved: true
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']

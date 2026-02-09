@@ -1,23 +1,64 @@
 services:
-  # 1. InfluxDB
-  influxdb:
-    image: influxdb:2.7
-    container_name: influxdb
+  # 1. Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
     ports:
-      - "8086:8086"
-    environment:
-      - DOCKER_INFLUXDB_INIT_MODE=setup
-      - DOCKER_INFLUXDB_INIT_USERNAME=admin
-      - DOCKER_INFLUXDB_INIT_PASSWORD=password1234
-      - DOCKER_INFLUXDB_INIT_ORG=nhn-cloud
-      - DOCKER_INFLUXDB_INIT_BUCKET=monitoring
+      - "9090:9090"
     volumes:
-      - influxdb_data:/var/lib/influxdb2
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
     restart: always
     networks:
       - monitoring
 
-  # 2. Loki (최신 스키마 v13 및 TSDB 적용)
+  # 2. Pushgateway (단기/배치 작업 메트릭 수집)
+  pushgateway:
+    image: prom/pushgateway:latest
+    container_name: pushgateway
+    ports:
+      - "9091:9091"
+    restart: always
+    networks:
+      - monitoring
+
+  # 3. Alertmanager
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./config/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager_data:/alertmanager
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    restart: always
+    networks:
+      - monitoring
+
+  # 3-1. Dooray 웹훅 어댑터 (Alertmanager → Dooray 채널)
+  dooray-webhook-adapter:
+    build: ./dooray-webhook-adapter
+    container_name: dooray-webhook-adapter
+    ports:
+      - "9095:9095"
+    environment:
+      # Dooray 메신저 인커밍 웹훅 URL (채널별로 발급)
+      # 위험( critical ) 알림을 보낼 채널 웹훅 URL
+      - DOORAY_HOOK_URL_CRITICAL=${DOORAY_HOOK_URL_CRITICAL:-}
+      # 중요( warning ) 알림을 보낼 채널 웹훅 URL
+      - DOORAY_HOOK_URL_WARNING=${DOORAY_HOOK_URL_WARNING:-}
+    restart: always
+    networks:
+      - monitoring
+
+  # 4. Loki (최신 스키마 v13 및 TSDB 적용)
   loki:
     image: grafana/loki:latest
     container_name: loki
@@ -33,7 +74,7 @@ services:
     networks:
       - monitoring
 
-  # 3. Grafana
+  # 5. Grafana
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -45,7 +86,7 @@ services:
     networks:
       - monitoring
 
-  # 4. Promtail
+  # 6. Promtail
   promtail:
     image: grafana/promtail:latest
     container_name: promtail
@@ -119,6 +160,7 @@ networks:
     driver: bridge
 
 volumes:
-  influxdb_data:
+  prometheus_data:
+  alertmanager_data:
   grafana_data:
   loki_data:

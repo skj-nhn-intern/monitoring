@@ -1,0 +1,34 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Alertmanager 연동
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# 알림 규칙 (필요 시 rules 파일 추가)
+rule_files:
+  # - "alerts/*.yml"
+
+scrape_configs:
+  # Prometheus 자체 메트릭
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - localhost:9090
+
+  # Pushgateway (배치/단기 작업에서 push한 메트릭 수집)
+  - job_name: pushgateway
+    honor_labels: true
+    static_configs:
+      - targets:
+          - pushgateway:9091
+
+  # 필요 시 추가 타겟 (Grafana, Loki 등)
+  # - job_name: grafana
+  #   static_configs:
+  #     - targets:
+  #         - grafana:3000
