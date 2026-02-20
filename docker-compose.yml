@@ -117,22 +117,22 @@ services:
       - monitoring
 
   # 7. NHN Cloud Exporter
-  nhn-cloud-exporter:
-    build: ./nhn-cloud-exporter
-    container_name: nhn-cloud-exporter
-    ports:
-      - "8000:8000"
-    env_file:
-      - ./nhn-cloud-exporter/.env
-    restart: always
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
-    networks:
-      - monitoring
+  # nhn-cloud-exporter:
+  #   build: ./nhn-cloud-exporter
+  #   container_name: nhn-cloud-exporter
+  #   ports:
+  #     - "8000:8000"
+  #   env_file:
+  #     - ./nhn-cloud-exporter/.env
+  #   restart: always
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 5s
+  #   networks:
+  #     - monitoring
 
 configs:
   loki_config:
