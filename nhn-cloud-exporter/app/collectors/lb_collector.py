@@ -17,7 +17,8 @@ class LoadBalancerCollector:
     def __init__(self, auth: NHNAuth):
         self.auth = auth
         self.settings = get_settings()
-        self.api_url = self.settings.nhn_lb_api_url
+        # 토큰 카탈로그에서 가져온 URL 우선, 없으면 설정값 사용
+        self.api_url = None  # collect()에서 동적으로 결정
     
     async def collect(self) -> List:
         """Load Balancer 메트릭 수집"""
@@ -29,14 +30,22 @@ class LoadBalancerCollector:
         try:
             headers = await self.auth.get_auth_headers(use_iam=True)
             
+            # API URL 결정: 토큰 카탈로그에서 가져온 URL 우선, 없으면 설정값 사용
+            api_url = self.auth.get_lb_api_url() or self.settings.nhn_lb_api_url
+            logger.debug(f"Load Balancer API URL: {api_url}")
+            
             # Load Balancer 목록 조회
-            # Tenant ID를 URL 경로에 포함 (OpenStack 스타일 API)
-            tenant_id = self.settings.nhn_tenant_id
-            url = f"{self.api_url}/v2.0/{tenant_id}/lbaas/loadbalancers"
+            # NHN Cloud Load Balancer API는 /v2.0/lbaas/loadbalancers 경로 사용
+            url = f"{api_url}/v2.0/lbaas/loadbalancers"
             
             async with httpx.AsyncClient(timeout=self.settings.http_timeout) as client:
                 response = await client.get(url, headers=headers)
                 if response.status_code == 401:
+                    # 401 에러 상세 정보 로깅
+                    error_body = response.text
+                    logger.error(f"Load Balancer API 401 에러 - 응답 본문: {error_body}")
+                    logger.error(f"사용된 URL: {url}")
+                    logger.error(f"사용된 헤더: {dict(headers)}")
                     # 토큰 만료 가능성 - 토큰 갱신 후 재시도
                     logger.warning("Load Balancer API 401 - 토큰 갱신 후 재시도합니다.")
                     # 토큰 캐시 무효화를 위해 새로운 토큰 요청
@@ -44,6 +53,9 @@ class LoadBalancerCollector:
                     self.auth._token_expires = None
                     headers = await self.auth.get_auth_headers(use_iam=True)
                     response = await client.get(url, headers=headers)
+                    if response.status_code == 401:
+                        error_body = response.text
+                        logger.error(f"Load Balancer API 401 에러 (재시도 후) - 응답 본문: {error_body}")
                 response.raise_for_status()
                 data = response.json()
                 
@@ -114,7 +126,7 @@ class LoadBalancerCollector:
                     )
                     
                     # Listener 조회
-                    listeners_url = f"{self.api_url}/v2.0/{tenant_id}/lbaas/listeners?loadbalancer_id={lb_id}"
+                    listeners_url = f"{api_url}/v2.0/lbaas/listeners?loadbalancer_id={lb_id}"
                     try:
                         listeners_response = await client.get(listeners_url, headers=headers)
                         listeners_response.raise_for_status()
@@ -137,7 +149,7 @@ class LoadBalancerCollector:
                         logger.warning(f"Listener 조회 실패 (LB {lb_id}): {e}")
                     
                     # Pool 조회
-                    pools_url = f"{self.api_url}/v2.0/{tenant_id}/lbaas/pools?loadbalancer_id={lb_id}"
+                    pools_url = f"{api_url}/v2.0/lbaas/pools?loadbalancer_id={lb_id}"
                     try:
                         pools_response = await client.get(pools_url, headers=headers)
                         pools_response.raise_for_status()
@@ -157,7 +169,7 @@ class LoadBalancerCollector:
                             )
                             
                             # Pool Member 조회
-                            members_url = f"{self.api_url}/v2.0/{tenant_id}/lbaas/pools/{pool_id}/members"
+                            members_url = f"{api_url}/v2.0/lbaas/pools/{pool_id}/members"
                             try:
                                 members_response = await client.get(members_url, headers=headers)
                                 members_response.raise_for_status()

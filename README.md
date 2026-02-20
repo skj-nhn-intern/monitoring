@@ -36,17 +36,24 @@ docker compose up -d
 
 1. **Dooray 메신저에서 인커밍 웹훅 발급**
    - 보낼 채널에서 **알림봇** 또는 **인커밍 웹훅** 연동 메뉴로 들어가 웹훅 URL을 복사합니다.
-   - 위험(critical)용 채널, 중요(warning)용 채널 각각 URL을 준비할 수 있습니다.
 
-2. **환경 변수 설정**
-   - 프로젝트 루트에 `.env` 파일을 만들고 아래처럼 넣습니다.
+2. **환경 변수 설정** (프로젝트 루트에 `.env` 파일 생성)
+
+   **옵션 1: 같은 채널 사용 (권장)**
    ```bash
-   # 위험 알림을 보낼 Dooray 채널 웹훅 URL (예: https://hook.dooray.com/services/...)
+   # 모든 알림을 같은 채널로 보내기
+   DOORAY_HOOK_URL=https://hook.dooray.com/services/xxx/yyy/zzz
+   ```
+
+   **옵션 2: severity별 다른 채널 사용**
+   ```bash
+   # 위험 알림을 보낼 Dooray 채널 웹훅 URL
    DOORAY_HOOK_URL_CRITICAL=https://hook.dooray.com/services/xxx/yyy/zzz
    # 중요 알림을 보낼 Dooray 채널 웹훅 URL
    DOORAY_HOOK_URL_WARNING=https://hook.dooray.com/services/xxx/yyy/zzz
    ```
-   - 같은 채널로 보내려면 두 값을 같은 URL로 설정하면 됩니다.
+   - 같은 채널로 보내려면 두 값을 같은 URL로 설정하거나, `DOORAY_HOOK_URL` 하나만 설정하면 됩니다.
+   - `DOORAY_HOOK_URL_CRITICAL` 또는 `DOORAY_HOOK_URL_WARNING`이 없으면 `DOORAY_HOOK_URL`을 사용합니다.
 
 3. **재기동**
    ```bash

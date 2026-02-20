@@ -18,6 +18,7 @@ class NHNAuth:
         self._token: Optional[str] = None
         self._token_expires: Optional[datetime] = None
         self._obs_storage_url: Optional[str] = None  # from token serviceCatalog
+        self._lb_api_url: Optional[str] = None  # from token serviceCatalog (network service)
         # OBS 전용 토큰 (NHN_OBS_API_PASSWORD 사용 시)
         self._token_obs: Optional[str] = None
         self._token_obs_expires: Optional[datetime] = None
@@ -93,6 +94,13 @@ class NHNAuth:
                 
                 expires_dt = datetime.fromisoformat(expires_str.replace("Z", "+00:00"))
                 storage_url = self._parse_obs_storage_url(access)
+                lb_url = self._parse_lb_api_url(access)
+                
+                # 디버깅: service catalog 로깅 (DEBUG 모드에서만)
+                if self.settings.debug:
+                    catalog = access.get("serviceCatalog", [])
+                    service_types = [svc.get("type", "unknown") for svc in catalog]
+                    logger.debug(f"Service Catalog 타입 목록: {', '.join(service_types)}")
                 
                 if cache_obs:
                     self._token_obs = token_id
@@ -104,7 +112,11 @@ class NHNAuth:
                     self._token = token_id
                     self._token_expires = expires_dt
                     self._obs_storage_url = storage_url
-                    logger.info("IAM 토큰 발급 완료")
+                    self._lb_api_url = lb_url
+                    if lb_url:
+                        logger.info(f"IAM 토큰 발급 완료 (Load Balancer API URL: {lb_url})")
+                    else:
+                        logger.warning("IAM 토큰 발급 완료 (Load Balancer API URL: service catalog에서 찾을 수 없음, 설정값 사용). DEBUG=true로 설정하면 service catalog를 확인할 수 있습니다.")
                 
                 return token_id
         except httpx.HTTPStatusError as e:
@@ -126,6 +138,37 @@ class NHNAuth:
             return None
         except Exception:
             return None
+    
+    def _parse_lb_api_url(self, access: dict) -> Optional[str]:
+        """토큰 응답의 serviceCatalog에서 network 서비스 publicURL 추출 (Load Balancer용)"""
+        try:
+            catalog = access.get("serviceCatalog", [])
+            for svc in catalog:
+                # network 서비스 타입 확인
+                service_type = svc.get("type", "")
+                service_name = svc.get("name", "")
+                # network 또는 load-balancer 관련 서비스 찾기
+                if "network" in service_type.lower() or "loadbalancer" in service_type.lower() or "lbaas" in service_type.lower():
+                    endpoints = svc.get("endpoints", [])
+                    if endpoints:
+                        url = endpoints[0].get("publicURL") or endpoints[0].get("internalURL")
+                        if url:
+                            return url.rstrip("/")
+                # 또는 service name으로 확인
+                elif "network" in service_name.lower() or "loadbalancer" in service_name.lower():
+                    endpoints = svc.get("endpoints", [])
+                    if endpoints:
+                        url = endpoints[0].get("publicURL") or endpoints[0].get("internalURL")
+                        if url:
+                            return url.rstrip("/")
+            return None
+        except Exception as e:
+            logger.debug(f"Load Balancer API URL 파싱 실패: {e}")
+            return None
+    
+    def get_lb_api_url(self) -> Optional[str]:
+        """Load Balancer API URL (토큰 카탈로그 또는 설정 기반). LB 수집 전 get_iam_token 호출 필요."""
+        return self._lb_api_url
     
     def get_obs_storage_url(self) -> Optional[str]:
         """Object Storage base URL (토큰 카탈로그 또는 설정 기반). OBS 수집 전 get_iam_token 호출 필요."""
@@ -175,10 +218,15 @@ class NHNAuth:
         """
         if use_iam:
             token = await self.get_iam_token(use_obs_password=use_obs_password)
-            return {
+            headers = {
                 "X-Auth-Token": token,
                 "Content-Type": "application/json"
             }
+            # Load Balancer API 등 일부 서비스에서 필요할 수 있는 헤더 추가
+            # OpenStack 스타일 API에서는 X-Auth-Project-Id 또는 X-Tenant-Id가 필요할 수 있음
+            if self.settings.nhn_tenant_id:
+                headers["X-Auth-Project-Id"] = self.settings.nhn_tenant_id
+            return headers
         else:
             return {
                 "X-TC-APP-KEY": self.get_appkey(service=service),

@@ -101,14 +101,24 @@ class WebhookHandler(BaseHTTPRequestHandler):
         is_critical = "critical" in receiver
         is_warning = "warning" in receiver
 
-        dooray_url = (
-            os.environ.get("DOORAY_HOOK_URL_CRITICAL")
-            if is_critical
-            else os.environ.get("DOORAY_HOOK_URL_WARNING") if is_warning else os.environ.get("DOORAY_HOOK_URL")
-        )
+        # 같은 채널 사용을 위한 fallback 로직:
+        # 1. severity별 URL이 있으면 우선 사용
+        # 2. 없으면 기본 DOORAY_HOOK_URL 사용
+        # 3. 그것도 없으면 다른 severity URL 사용 (같은 채널로 보내기)
+        dooray_url = None
+        if is_critical:
+            dooray_url = os.environ.get("DOORAY_HOOK_URL_CRITICAL")
+        elif is_warning:
+            dooray_url = os.environ.get("DOORAY_HOOK_URL_WARNING")
+        
+        # fallback: 기본 URL 또는 다른 severity URL 사용 (같은 채널 지원)
+        if not dooray_url:
+            dooray_url = os.environ.get("DOORAY_HOOK_URL")
+        if not dooray_url:
+            dooray_url = os.environ.get("DOORAY_HOOK_URL_CRITICAL") or os.environ.get("DOORAY_HOOK_URL_WARNING")
 
         if not dooray_url:
-            print(f"No Dooray URL for receiver: {receiver}", flush=True)
+            print(f"No Dooray URL configured for receiver: {receiver}", flush=True)
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"OK")

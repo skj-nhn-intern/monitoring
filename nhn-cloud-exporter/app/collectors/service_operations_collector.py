@@ -399,7 +399,6 @@ class ServiceOperationsCollector:
                 return metrics
             
             api_url = self.settings.nhn_lb_api_url
-            tenant_id = self.settings.nhn_tenant_id
             
             async with httpx.AsyncClient(timeout=self.settings.http_timeout) as client:
                 # Load Balancer별 Pool Member 상태 조회
@@ -411,8 +410,8 @@ class ServiceOperationsCollector:
                 
                 for lb_id in lb_ids:
                     # Load Balancer 정보 조회
-                    # Tenant ID를 URL 경로에 포함 (OpenStack 스타일 API)
-                    lb_url = f"{api_url}/v2.0/{tenant_id}/lbaas/loadbalancers/{lb_id}"
+                    # NHN Cloud Load Balancer API는 /v2.0/lbaas/loadbalancers/{lb_id} 경로 사용
+                    lb_url = f"{api_url}/v2.0/lbaas/loadbalancers/{lb_id}"
                     try:
                         lb_response = await client.get(lb_url, headers=headers)
                         if lb_response.status_code == 401:
@@ -428,7 +427,7 @@ class ServiceOperationsCollector:
                         lb_name = lb.get("name", "")
                         
                         # Pool 조회
-                        pools_url = f"{api_url}/v2.0/{tenant_id}/lbaas/pools?loadbalancer_id={lb_id}"
+                        pools_url = f"{api_url}/v2.0/lbaas/pools?loadbalancer_id={lb_id}"
                         pools_response = await client.get(pools_url, headers=headers)
                         if pools_response.status_code == 401:
                             self.auth._token = None
@@ -444,7 +443,7 @@ class ServiceOperationsCollector:
                             pool_name = pool.get("name", "")
                             
                             # Pool Member 조회
-                            members_url = f"{api_url}/v2.0/{tenant_id}/lbaas/pools/{pool_id}/members"
+                            members_url = f"{api_url}/v2.0/lbaas/pools/{pool_id}/members"
                             members_response = await client.get(members_url, headers=headers)
                             if members_response.status_code == 401:
                                 self.auth._token = None

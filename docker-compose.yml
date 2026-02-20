@@ -60,11 +60,15 @@ services:
     container_name: dooray-webhook-adapter
     ports:
       - "9095:9095"
+    env_file:
+      - .env
     environment:
       # Dooray 메신저 인커밍 웹훅 URL (채널별로 발급)
-      # 위험( critical ) 알림을 보낼 채널 웹훅 URL
+      # 기본 URL (같은 채널 사용 시 이 값만 설정하면 됨)
+      - DOORAY_HOOK_URL=${DOORAY_HOOK_URL:-}
+      # 위험( critical ) 알림을 보낼 채널 웹훅 URL (없으면 DOORAY_HOOK_URL 사용)
       - DOORAY_HOOK_URL_CRITICAL=${DOORAY_HOOK_URL_CRITICAL:-}
-      # 중요( warning ) 알림을 보낼 채널 웹훅 URL
+      # 중요( warning ) 알림을 보낼 채널 웹훅 URL (없으면 DOORAY_HOOK_URL 사용)
       - DOORAY_HOOK_URL_WARNING=${DOORAY_HOOK_URL_WARNING:-}
     restart: always
     networks:
