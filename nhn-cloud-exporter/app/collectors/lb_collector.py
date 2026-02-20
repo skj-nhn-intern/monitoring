@@ -30,7 +30,9 @@ class LoadBalancerCollector:
             headers = await self.auth.get_auth_headers(use_iam=True)
             
             # Load Balancer 목록 조회
-            url = f"{self.api_url}/v2.0/lbaas/loadbalancers"
+            # Tenant ID를 URL 경로에 포함 (OpenStack 스타일 API)
+            tenant_id = self.settings.nhn_tenant_id
+            url = f"{self.api_url}/v2.0/{tenant_id}/lbaas/loadbalancers"
             
             async with httpx.AsyncClient(timeout=self.settings.http_timeout) as client:
                 response = await client.get(url, headers=headers)
@@ -112,7 +114,7 @@ class LoadBalancerCollector:
                     )
                     
                     # Listener 조회
-                    listeners_url = f"{self.api_url}/v2.0/lbaas/listeners?loadbalancer_id={lb_id}"
+                    listeners_url = f"{self.api_url}/v2.0/{tenant_id}/lbaas/listeners?loadbalancer_id={lb_id}"
                     try:
                         listeners_response = await client.get(listeners_url, headers=headers)
                         listeners_response.raise_for_status()
@@ -135,7 +137,7 @@ class LoadBalancerCollector:
                         logger.warning(f"Listener 조회 실패 (LB {lb_id}): {e}")
                     
                     # Pool 조회
-                    pools_url = f"{self.api_url}/v2.0/lbaas/pools?loadbalancer_id={lb_id}"
+                    pools_url = f"{self.api_url}/v2.0/{tenant_id}/lbaas/pools?loadbalancer_id={lb_id}"
                     try:
                         pools_response = await client.get(pools_url, headers=headers)
                         pools_response.raise_for_status()
@@ -155,7 +157,7 @@ class LoadBalancerCollector:
                             )
                             
                             # Pool Member 조회
-                            members_url = f"{self.api_url}/v2.0/lbaas/pools/{pool_id}/members"
+                            members_url = f"{self.api_url}/v2.0/{tenant_id}/lbaas/pools/{pool_id}/members"
                             try:
                                 members_response = await client.get(members_url, headers=headers)
                                 members_response.raise_for_status()
