@@ -7,7 +7,7 @@
 | 서비스        | 포트  | 설명 |
 |---------------|-------|------|
 | **Prometheus** | 9090 | 메트릭 수집·저장·쿼리 |
-| **Pushgateway** | 9091 | 단기/배치 작업이 push하는 메트릭 수집 |
+| **Pushgateway** (프록시) | 9091 | 단기/배치 작업 메트릭 push (PUT→POST 변환 지원) |
 | **Alertmanager** | 9093 | 알림 라우팅·그룹핑·침묵 |
 | **Dooray 웹훅 어댑터** | 9095 | Alertmanager → Dooray 채널 전달 |
 | **Loki**      | 3100 | 로그 저장·쿼리 |
@@ -56,9 +56,14 @@ docker compose up -d
 
 ## Pushgateway 사용 예 (배치/단기 작업)
 
+- **9091** 포트는 Pushgateway 앞단 **프록시**가 받습니다. **POST**와 **PUT** 모두 지원( PUT은 내부에서 POST로 변환 )합니다.
+- Prometheus는 Pushgateway를 직접 스크랩하므로 동작에는 변경이 없습니다.
+
 ```bash
-# 단일 메트릭 push
-echo "my_metric 123" | curl --data-binary @- http://localhost:9091/metrics/job/my_job/instance/my_instance
+# 단일 메트릭 push (POST)
+echo "my_metric 123" | curl --data-binary @- -X POST http://localhost:9091/metrics/job/my_job/instance/my_instance
+# PUT으로 보내도 프록시가 POST로 변환하여 Pushgateway에 전달
+echo "my_metric 123" | curl --data-binary @- -X PUT http://localhost:9091/metrics/job/my_job/instance/my_instance
 ```
 
 Grafana에서 Prometheus를 데이터 소스로 추가하면 메트릭 대시보드를 만들 수 있습니다.

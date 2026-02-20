@@ -1,0 +1,17 @@
+# FastAPI and server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+
+# HTTP Client
+httpx==0.26.0
+aiohttp==3.9.1
+
+# Validation and Settings
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Prometheus
+prometheus-client==0.20.0
+
+# Utilities
+python-dotenv==1.0.0

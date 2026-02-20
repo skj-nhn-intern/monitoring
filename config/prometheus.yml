@@ -27,6 +27,13 @@ scrape_configs:
       - targets:
           - pushgateway:9091
 
+  # NHN Cloud Exporter (NHN Cloud 인프라 메트릭 수집)
+  - job_name: nhn-cloud-exporter
+    scrape_interval: 60s
+    static_configs:
+      - targets:
+          - nhn-cloud-exporter:8000
+
   # 필요 시 추가 타겟 (Grafana, Loki 등)
   # - job_name: grafana
   #   static_configs:

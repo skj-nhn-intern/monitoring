@@ -20,8 +20,20 @@ services:
   pushgateway:
     image: prom/pushgateway:latest
     container_name: pushgateway
+    # 호스트에는 프록시만 노출 (PUT→POST 변환용)
+    restart: always
+    networks:
+      - monitoring
+
+  # 2-1. Pushgateway 프록시 (PUT 요청을 POST로 변환하여 전달)
+  pushgateway-proxy:
+    build: ./pushgateway-proxy
+    container_name: pushgateway-proxy
     ports:
       - "9091:9091"
+    environment:
+      - PUSHGATEWAY_HOST=pushgateway
+      - PUSHGATEWAY_PORT=9091
     restart: always
     networks:
       - monitoring
@@ -97,6 +109,24 @@ services:
         target: /etc/promtail/config.yml
     command: -config.file=/etc/promtail/config.yml
     restart: always
+    networks:
+      - monitoring
+
+  # 7. NHN Cloud Exporter
+  nhn-cloud-exporter:
+    build: ./nhn-cloud-exporter
+    container_name: nhn-cloud-exporter
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./nhn-cloud-exporter/.env
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
     networks:
       - monitoring
 
