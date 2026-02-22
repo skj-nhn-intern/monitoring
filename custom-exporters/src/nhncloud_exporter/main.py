@@ -50,7 +50,7 @@ def run_collectors() -> None:
     # RDS는 RDS_SCRAPE_INTERVAL마다만 실행 (DB 상태는 자주 안 바뀌고, DNS 오류 시 로그 스팸 완화)
     last_rds_run = 0.0
 
-    if config.NHN_OBS_TARGETS:
+    if config.OBS_PUBLIC_HEALTH_CHECK_URLS:
         obs_thread = threading.Thread(
             target=_obs_health_check_loop,
             name="obs-health-check",
@@ -58,9 +58,9 @@ def run_collectors() -> None:
         )
         obs_thread.start()
         logger.info(
-            "OBS health check started (interval=%ds, targets=%s)",
+            "OBS health check started (interval=%ds, urls=%d)",
             config.OBS_HEALTH_CHECK_INTERVAL,
-            config.NHN_OBS_TARGETS,
+            len(config.OBS_PUBLIC_HEALTH_CHECK_URLS),
         )
 
     if "rds" not in disabled and config.NHN_RDS_APPKEY:

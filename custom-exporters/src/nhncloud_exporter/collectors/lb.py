@@ -7,6 +7,7 @@ API: OpenStack LBaaS v2.0 compatible (NHN Cloud Network API).
 
 import logging
 from datetime import datetime, timezone
+from typing import Optional
 
 from nhncloud_exporter import config
 from nhncloud_exporter.auth import token_mgr
@@ -34,8 +35,23 @@ from nhncloud_exporter.metrics import (
 logger = logging.getLogger("nhncloud-exporter")
 
 
+def _allowed_lb_ids(lb_list: list) -> Optional[set]:
+    """NHN_LB_IDS 또는 LB_NAMES가 있으면 해당 LB만, 없으면 None(전체)."""
+    if not config.NHN_LB_IDS and not config.LB_NAMES:
+        return None
+    want_ids = set(config.NHN_LB_IDS)
+    want_names = set(config.LB_NAMES)
+    allowed = set()
+    for lb in lb_list:
+        lb_id = lb.get("id", "")
+        lb_name = lb.get("name", "")
+        if lb_id in want_ids or lb_name in want_names:
+            allowed.add(lb_id)
+    return allowed if (want_ids or want_names) else None
+
+
 class LoadBalancerCollector:
-    """Collects Load Balancer, Pool, Member, HealthMonitor, Listener metrics."""
+    """Collects Load Balancer, Pool, Member, HealthMonitor, Listener metrics. NHN_LB_IDS/LB_NAMES 지정 시 해당 LB만 수집."""
 
     def collect(self) -> None:
         if not config.NHN_NETWORK_ENDPOINT:
@@ -48,10 +64,14 @@ class LoadBalancerCollector:
         base = config.NHN_NETWORK_ENDPOINT.rstrip("/")
 
         try:
-            self._collect_loadbalancers(base, headers)
-            self._collect_pools_and_members(base, headers)
-            self._collect_healthmonitors(base, headers)
-            self._collect_listeners(base, headers)
+            lb_data = api_get(f"{base}/v2.0/lbaas/loadbalancers", headers)
+            lb_list = lb_data.get("loadbalancers", [])
+            allowed_lb_ids = _allowed_lb_ids(lb_list)
+
+            self._collect_loadbalancers(lb_list, allowed_lb_ids)
+            allowed_pool_ids = self._collect_pools_and_members(base, headers, lb_list, allowed_lb_ids)
+            self._collect_healthmonitors(base, headers, allowed_pool_ids)
+            self._collect_listeners(base, headers, allowed_lb_ids)
         except Exception as e:
             err = str(e)
             if "401" in err:
@@ -66,10 +86,11 @@ class LoadBalancerCollector:
                 logger.error("LB collector error: %s", e)
             exporter_scrape_errors.labels(collector="loadbalancer").inc()
 
-    def _collect_loadbalancers(self, base: str, headers: dict) -> None:
-        lb_data = api_get(f"{base}/v2.0/lbaas/loadbalancers", headers)
-        for lb in lb_data.get("loadbalancers", []):
+    def _collect_loadbalancers(self, lb_list: list, allowed_lb_ids: Optional[set]) -> None:
+        for lb in lb_list:
             lb_id = lb["id"]
+            if allowed_lb_ids is not None and lb_id not in allowed_lb_ids:
+                continue
             lb_name = lb.get("name", lb_id[:8])
             lb_status.labels(lb_id=lb_id, lb_name=lb_name).set(
                 1 if lb.get("operating_status", "").upper() == "ONLINE" else 0
@@ -81,15 +102,24 @@ class LoadBalancerCollector:
                 1 if lb.get("admin_state_up", False) else 0
             )
 
-    def _collect_pools_and_members(self, base: str, headers: dict) -> None:
+    def _collect_pools_and_members(
+        self, base: str, headers: dict, lb_list: list, allowed_lb_ids: Optional[set]
+    ) -> set:
+        """수집한 pool id 집합 반환 (healthmonitor 필터용)."""
         pools_data = api_get(f"{base}/v2.0/lbaas/pools", headers)
+        allowed_pool_ids = set()
         for pool in pools_data.get("pools", []):
-            pool_id = pool["id"]
-            pool_name = pool.get("name", pool_id[:8])
-            parent_lb_name = ""
+            pool_lb_id = ""
             for lb_ref in pool.get("loadbalancers", []):
-                parent_lb_name = lb_ref.get("id", "")[:8]
+                pool_lb_id = lb_ref.get("id", "")
                 break
+            if allowed_lb_ids is not None and pool_lb_id not in allowed_lb_ids:
+                continue
+
+            pool_id = pool["id"]
+            allowed_pool_ids.add(pool_id)
+            pool_name = pool.get("name", pool_id[:8])
+            parent_lb_name = pool_lb_id[:8] if pool_lb_id else ""
 
             pool_status.labels(
                 pool_id=pool_id, pool_name=pool_name, lb_name=parent_lb_name
@@ -133,13 +163,18 @@ class LoadBalancerCollector:
                     1 if m.get("admin_state_up", False) else 0
                 )
                 member_weight.labels(**labels).set(m.get("weight", 1))
+        return allowed_pool_ids
 
-    def _collect_healthmonitors(self, base: str, headers: dict) -> None:
+    def _collect_healthmonitors(
+        self, base: str, headers: dict, allowed_pool_ids: Optional[set]
+    ) -> None:
         hm_data = api_get(f"{base}/v2.0/lbaas/healthmonitors", headers)
         for hm in hm_data.get("healthmonitors", []):
-            hm_id = hm["id"]
             hm_pools = hm.get("pools", [])
             hm_pool_id = hm_pools[0]["id"] if hm_pools else ""
+            if allowed_pool_ids is not None and hm_pool_id not in allowed_pool_ids:
+                continue
+            hm_id = hm["id"]
             healthmonitor_status.labels(hm_id=hm_id, pool_id=hm_pool_id).set(
                 1 if hm.get("admin_state_up", False) else 0
             )
@@ -153,16 +188,21 @@ class LoadBalancerCollector:
                 hm_id=hm_id, pool_id=hm_pool_id
             ).set(hm.get("max_retries", 0))
 
-    def _collect_listeners(self, base: str, headers: dict) -> None:
+    def _collect_listeners(
+        self, base: str, headers: dict, allowed_lb_ids: Optional[set]
+    ) -> None:
         listeners_data = api_get(f"{base}/v2.0/lbaas/listeners", headers)
         for li in listeners_data.get("listeners", []):
+            parent_lb_id = ""
+            for lb_ref in li.get("loadbalancers", []):
+                parent_lb_id = lb_ref.get("id", "")
+                break
+            if allowed_lb_ids is not None and parent_lb_id not in allowed_lb_ids:
+                continue
             li_id = li["id"]
             protocol = li.get("protocol", "")
             port = str(li.get("protocol_port", ""))
-            parent = ""
-            for lb_ref in li.get("loadbalancers", []):
-                parent = lb_ref.get("id", "")[:8]
-                break
+            parent = parent_lb_id[:8] if parent_lb_id else ""
             listener_connection_limit.labels(
                 listener_id=li_id, protocol=protocol, port=port, lb_name=parent
             ).set(li.get("connection_limit", 0))

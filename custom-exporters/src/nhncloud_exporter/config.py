@@ -12,10 +12,11 @@ NHN_TENANT_ID = os.getenv("NHN_TENANT_ID", "")
 NHN_USERNAME = os.getenv("NHN_USERNAME", "")
 NHN_PASSWORD = os.getenv("NHN_PASSWORD", "")
 
-# Network (LB)
+# Network (LB). 지정 시 해당 LB만 수집 (pool/member/listener 등). 미설정 시 전체 수집.
 NHN_NETWORK_ENDPOINT = os.getenv("NHN_NETWORK_ENDPOINT", "")
-LB_POOL_IDS = [p.strip() for p in os.getenv("NHN_LB_POOL_IDS", "").split(",") if p.strip()]
+NHN_LB_IDS = [i.strip() for i in os.getenv("NHN_LB_IDS", "").split(",") if i.strip()]
 LB_NAMES = [n.strip() for n in os.getenv("NHN_LB_NAMES", "").split(",") if n.strip()]
+LB_POOL_IDS = [p.strip() for p in os.getenv("NHN_LB_POOL_IDS", "").split(",") if p.strip()]
 
 # CDN
 NHN_CDN_APPKEY = os.getenv("NHN_CDN_APPKEY", "")
@@ -52,6 +53,12 @@ NHN_OBS_TARGETS = [
     t.strip()
     for t in os.getenv("NHN_OBS_TARGETS", "").split(",")
     if t.strip()
+]
+# 공개 URL만 직접 체크 (API/토큰 불필요). 쉼표 구분 전체 URL. 브라우저에서 여는 그 주소 그대로 넣으면 됨.
+OBS_PUBLIC_HEALTH_CHECK_URLS = [
+    u.strip()
+    for u in os.getenv("OBS_PUBLIC_HEALTH_CHECK_URLS", "").split(",")
+    if u.strip()
 ]
 OBS_HEALTH_CHECK_INTERVAL = int(os.getenv("OBS_HEALTH_CHECK_INTERVAL", "30"))
 
