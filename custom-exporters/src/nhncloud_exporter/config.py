@@ -39,7 +39,7 @@ NHN_RDS_APPKEY = os.getenv("NHN_RDS_APPKEY", "")
 NHN_RDS_SECRETKEY = os.getenv("NHN_RDS_SECRETKEY", "")
 NHN_RDS_API_BASE = os.getenv(
     "NHN_RDS_API_BASE",
-    "https://kr1-api-mysql.rds.nhncloudservice.com",
+    "https://kr1-rds-mysql.api.nhncloudservice.com",
 )
 # RDS 수집 간격(초). DB 상태/백업은 자주 안 바뀌므로 기본 300(5분). DNS 오류 시 로그 스팸 완화
 RDS_SCRAPE_INTERVAL = int(os.getenv("RDS_SCRAPE_INTERVAL", "300"))

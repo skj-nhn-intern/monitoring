@@ -63,6 +63,20 @@ class RDSCollector:
             logger.debug("RDS collector skipped: no appkey")
             return
 
+        base = config.NHN_RDS_API_BASE.rstrip("/")
+        if "cdn.api" in base or "cdn." in base.split("//")[-1].split("/")[0]:
+            logger.error(
+                "RDS: NHN_RDS_API_BASE must be RDS API URL (e.g. https://kr1-rds-mysql.api.nhncloudservice.com), "
+                "not CDN URL. Current value looks like CDN. Fix .env and restart."
+            )
+            exporter_scrape_errors.labels(collector="rds").inc()
+            return
+        if "rds" not in base.lower():
+            logger.warning(
+                "RDS: NHN_RDS_API_BASE should contain 'rds' (e.g. kr1-rds-mysql.api.nhncloudservice.com). Got: %s",
+                base[:80],
+            )
+
         headers = {
             "Content-Type": "application/json",
             "X-TC-APP-KEY": config.NHN_RDS_APPKEY,
@@ -73,7 +87,6 @@ class RDSCollector:
             if config.NHN_RDS_SECRETKEY
             else config.NHN_PASSWORD,
         }
-        base = config.NHN_RDS_API_BASE.rstrip("/")
 
         try:
             # DNS/연결 실패 시 재시도 없이 한 번만 로그 (retry_connection_errors=False)

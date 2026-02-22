@@ -7,7 +7,7 @@ import time
 from prometheus_client import start_http_server
 
 from nhncloud_exporter import config
-from nhncloud_exporter.auth import token_mgr
+from nhncloud_exporter.auth import token_mgr, is_lb_oauth2
 from nhncloud_exporter.metrics import (
     exporter_scrape_duration,
     exporter_scrape_errors,
@@ -100,6 +100,11 @@ def main() -> None:
     logger.info("Port: %d | Interval: %ds", config.EXPORTER_PORT, config.SCRAPE_INTERVAL)
     logger.info("=" * 60)
 
+    if config.NHN_NETWORK_ENDPOINT:
+        logger.info(
+            "LB auth: %s",
+            "OAuth2 (User Access Key)" if is_lb_oauth2() else "Keystone (tenant/user/password)",
+        )
     if not config.NHN_TENANT_ID or not config.NHN_USERNAME:
         logger.warning(
             "NHN_TENANT_ID or NHN_USERNAME not set - LB/OBS collectors may fail"

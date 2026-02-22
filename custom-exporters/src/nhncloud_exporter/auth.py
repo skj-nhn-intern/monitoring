@@ -69,6 +69,11 @@ def get_lb_token() -> str:
     return token_mgr.get_token()
 
 
+def is_lb_oauth2() -> bool:
+    """LB가 OAuth2 사용 중이면 True (헤더 추가 시 사용)."""
+    return bool(config.NHN_LB_OAUTH2_KEY and config.NHN_LB_OAUTH2_SECRET)
+
+
 class TokenManager:
     """Token manager with auto-refresh (refresh 5 minutes before expiry)."""
 

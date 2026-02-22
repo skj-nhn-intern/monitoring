@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from nhncloud_exporter import config
-from nhncloud_exporter.auth import get_lb_token
+from nhncloud_exporter.auth import get_lb_token, is_lb_oauth2
 from nhncloud_exporter.utils import api_get
 from nhncloud_exporter.metrics import (
     exporter_scrape_errors,
@@ -58,8 +58,11 @@ class LoadBalancerCollector:
             logger.debug("LB collector skipped: no NHN_NETWORK_ENDPOINT")
             return
 
-        headers = {"X-Auth-Token": get_lb_token()}
-        if config.NHN_TENANT_ID:
+        token = get_lb_token()
+        headers = {"X-Auth-Token": token}
+        if is_lb_oauth2():
+            headers["Authorization"] = f"Bearer {token}"
+        if config.NHN_TENANT_ID and not is_lb_oauth2():
             headers["X-Tenant-Id"] = config.NHN_TENANT_ID
         base = config.NHN_NETWORK_ENDPOINT.rstrip("/")
 
