@@ -167,7 +167,13 @@ class CDNCollector:
                         hit / total_req if total_req > 0 else 0
                     )
             except Exception as e:
-                logger.warning("CDN traffic stats error for %s: %s", domain, e)
+                if "404" in str(e):
+                    logger.warning(
+                        "CDN traffic 404 for %s. Check API/domain or NHN_DISABLE_COLLECTORS=cdn",
+                        domain,
+                    )
+                else:
+                    logger.warning("CDN traffic stats error for %s: %s", domain, e)
 
             try:
                 httpcode_url = (
@@ -187,7 +193,13 @@ class CDNCollector:
                 cdn_http_4xx.labels(domain=domain).set(total_4xx)
                 cdn_http_5xx.labels(domain=domain).set(total_5xx)
             except Exception as e:
-                logger.warning("CDN HTTP stats error for %s: %s", domain, e)
+                if "404" in str(e):
+                    logger.warning(
+                        "CDN HTTP stats 404 for %s. Check API/domain or NHN_DISABLE_COLLECTORS=cdn",
+                        domain,
+                    )
+                else:
+                    logger.warning("CDN HTTP stats error for %s: %s", domain, e)
 
     def _collect_certificates(self, base: str, headers: dict) -> None:
         try:

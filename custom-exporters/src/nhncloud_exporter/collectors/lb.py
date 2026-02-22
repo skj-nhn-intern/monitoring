@@ -43,6 +43,8 @@ class LoadBalancerCollector:
             return
 
         headers = {"X-Auth-Token": token_mgr.get_token()}
+        if config.NHN_TENANT_ID:
+            headers["X-Tenant-Id"] = config.NHN_TENANT_ID
         base = config.NHN_NETWORK_ENDPOINT.rstrip("/")
 
         try:
@@ -51,7 +53,17 @@ class LoadBalancerCollector:
             self._collect_healthmonitors(base, headers)
             self._collect_listeners(base, headers)
         except Exception as e:
-            logger.error("LB collector error: %s", e)
+            err = str(e)
+            if "401" in err:
+                logger.warning(
+                    "LB API 401 Unauthorized. Use API password (not login password): "
+                    "Compute > Instance > API Endpoint. Check NHN_TENANT_ID, NHN_USERNAME, NHN_PASSWORD."
+                )
+                resp = getattr(e, "response", None)
+                if resp is not None and hasattr(resp, "text") and resp.text:
+                    logger.debug("LB API 401 response: %s", resp.text[:500])
+            else:
+                logger.error("LB collector error: %s", e)
             exporter_scrape_errors.labels(collector="loadbalancer").inc()
 
     def _collect_loadbalancers(self, base: str, headers: dict) -> None:
