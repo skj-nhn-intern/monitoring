@@ -14,6 +14,13 @@ NHN_PASSWORD = os.getenv("NHN_PASSWORD", "")
 
 # Network (LB). 지정 시 해당 LB만 수집 (pool/member/listener 등). 미설정 시 전체 수집.
 NHN_NETWORK_ENDPOINT = os.getenv("NHN_NETWORK_ENDPOINT", "")
+# LB 전용 OAuth2 (Keystone 401 시 사용). 콘솔 > 이메일 > API 보안 설정 > User Access Key ID / Secret 발급.
+NHN_LB_OAUTH2_KEY = os.getenv("NHN_LB_OAUTH2_KEY", "")
+NHN_LB_OAUTH2_SECRET = os.getenv("NHN_LB_OAUTH2_SECRET", "")
+NHN_OAUTH2_TOKEN_URL = os.getenv(
+    "NHN_OAUTH2_TOKEN_URL",
+    "https://oauth.api.nhncloudservice.com/oauth2/token/create",
+)
 NHN_LB_IDS = [i.strip() for i in os.getenv("NHN_LB_IDS", "").split(",") if i.strip()]
 LB_NAMES = [n.strip() for n in os.getenv("NHN_LB_NAMES", "").split(",") if n.strip()]
 LB_POOL_IDS = [p.strip() for p in os.getenv("NHN_LB_POOL_IDS", "").split(",") if p.strip()]
@@ -21,9 +28,10 @@ LB_POOL_IDS = [p.strip() for p in os.getenv("NHN_LB_POOL_IDS", "").split(",") if
 # CDN
 NHN_CDN_APPKEY = os.getenv("NHN_CDN_APPKEY", "")
 NHN_CDN_SECRETKEY = os.getenv("NHN_CDN_SECRETKEY", "")
+# 문서 기준 CDN Public API 도메인은 리전 없음. kr1-cdn 사용 시 statistics API 404 발생 가능.
 NHN_CDN_API_BASE = os.getenv(
     "NHN_CDN_API_BASE",
-    "https://kr1-cdn.api.nhncloudservice.com",
+    "https://cdn.api.nhncloudservice.com",
 )
 
 # RDS

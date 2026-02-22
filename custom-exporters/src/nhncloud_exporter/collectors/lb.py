@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from nhncloud_exporter import config
-from nhncloud_exporter.auth import token_mgr
+from nhncloud_exporter.auth import get_lb_token
 from nhncloud_exporter.utils import api_get
 from nhncloud_exporter.metrics import (
     exporter_scrape_errors,
@@ -58,7 +58,7 @@ class LoadBalancerCollector:
             logger.debug("LB collector skipped: no NHN_NETWORK_ENDPOINT")
             return
 
-        headers = {"X-Auth-Token": token_mgr.get_token()}
+        headers = {"X-Auth-Token": get_lb_token()}
         if config.NHN_TENANT_ID:
             headers["X-Tenant-Id"] = config.NHN_TENANT_ID
         base = config.NHN_NETWORK_ENDPOINT.rstrip("/")
@@ -76,8 +76,8 @@ class LoadBalancerCollector:
             err = str(e)
             if "401" in err:
                 logger.warning(
-                    "LB API 401 Unauthorized. Use API password (not login password): "
-                    "Compute > Instance > API Endpoint. Check NHN_TENANT_ID, NHN_USERNAME, NHN_PASSWORD."
+                    "LB API 401. Try OAuth2: set NHN_LB_OAUTH2_KEY + NHN_LB_OAUTH2_SECRET (Console > API Security > User Access Key). "
+                    "Else check NHN_TENANT_ID, NHN_USERNAME, NHN_PASSWORD (API password)."
                 )
                 resp = getattr(e, "response", None)
                 if resp is not None and hasattr(resp, "text") and resp.text:
