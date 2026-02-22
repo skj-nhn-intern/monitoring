@@ -69,11 +69,18 @@ def _log_lb_error(step: str, url: str, e: Exception) -> None:
         )
         logger.warning("LB API 응답 본문: %s", body or "(비어 있음)")
         if status == 401:
-            logger.warning(
-                "LB 401 진단: 인증 실패. Network API는 Keystone 토큰만 지원합니다. "
-                "NHN_TENANT_ID, NHN_USERNAME, NHN_PASSWORD(API 전용 비밀번호) 설정 후 "
-                "NHN_LB_OAUTH2_KEY/SECRET 는 비우세요."
-            )
+            body_lower = (e.response.text or "").lower()
+            if "unauthorized tenant" in body_lower or "tenant" in body_lower:
+                logger.warning(
+                    "LB 401 진단: Unauthorized tenant – 토큰은 발급됐지만 해당 tenant(프로젝트)가 Network/LB API 접근 권한이 없거나, "
+                    "NHN_TENANT_ID가 로드밸런서가 속한 프로젝트 ID가 아닙니다. 콘솔에서 (1) LB가 속한 프로젝트 (2) 해당 프로젝트의 프로젝트 ID (3) 그 프로젝트에 접근 가능한 계정의 API 비밀번호 로 NHN_TENANT_ID, NHN_USERNAME, NHN_PASSWORD 를 맞춰보세요."
+                )
+            else:
+                logger.warning(
+                    "LB 401 진단: 인증 실패. Network API는 Keystone 토큰만 지원합니다. "
+                    "NHN_TENANT_ID, NHN_USERNAME, NHN_PASSWORD(API 전용 비밀번호) 설정 후 "
+                    "NHN_LB_OAUTH2_KEY/SECRET 는 비우세요."
+                )
         elif status == 403:
             logger.warning(
                 "LB 403 진단: 권한 없음. 해당 계정/프로젝트에 Load Balancer API 접근 권한이 있는지 콘솔에서 확인하세요."
