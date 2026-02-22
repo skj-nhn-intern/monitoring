@@ -89,9 +89,13 @@ class LoadBalancerCollector:
                         "LB 401 response body: %s",
                         resp.text[:500].replace("\n", " "),
                     )
-                if not req_url and "token" not in err.lower():
+                if req_url and "/lbaas/" in req_url:
                     logger.warning(
-                        "If using OAuth2, Network API may require Keystone – try NHN_TENANT_ID, NHN_USERNAME, NHN_PASSWORD and clear NHN_LB_OAUTH2_*."
+                        "Network API rejected OAuth2 token. Use Keystone for LB: unset NHN_LB_OAUTH2_KEY and NHN_LB_OAUTH2_SECRET, set NHN_TENANT_ID, NHN_USERNAME, NHN_PASSWORD (API password)."
+                    )
+                elif not req_url or "token" not in err.lower():
+                    logger.warning(
+                        "If 401 was on token URL, check NHN_OAUTH2_TOKEN_URL / Keystone URL and credentials. For LB API, prefer Keystone (NHN_TENANT_ID, NHN_USERNAME, NHN_PASSWORD) and leave NHN_LB_OAUTH2_* unset."
                     )
             else:
                 logger.error("LB collector error at %s: %s", req_url or "?", e)

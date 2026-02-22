@@ -79,15 +79,14 @@ class RDSCollector:
                 base[:80],
             )
 
+        # NHN 문서: X-TC-AUTHENTICATION-ID = User Access Key ID, X-TC-AUTHENTICATION-SECRET = Secret Access Key
+        auth_id = config.NHN_RDS_ACCESS_KEY_ID or config.NHN_USERNAME
+        auth_secret = config.NHN_RDS_SECRETKEY or config.NHN_PASSWORD
         headers = {
             "Content-Type": "application/json",
             "X-TC-APP-KEY": config.NHN_RDS_APPKEY,
-            "X-TC-AUTHENTICATION-ID": config.NHN_RDS_SECRETKEY
-            if config.NHN_RDS_SECRETKEY
-            else config.NHN_USERNAME,
-            "X-TC-AUTHENTICATION-SECRET": config.NHN_RDS_SECRETKEY
-            if config.NHN_RDS_SECRETKEY
-            else config.NHN_PASSWORD,
+            "X-TC-AUTHENTICATION-ID": auth_id,
+            "X-TC-AUTHENTICATION-SECRET": auth_secret,
         }
 
         rds_up.set(0)

@@ -34,9 +34,10 @@ NHN_CDN_API_BASE = os.getenv(
     "https://cdn.api.nhncloudservice.com",
 )
 
-# RDS
+# RDS (API Security: User Access Key ID + Secret Access Key)
 NHN_RDS_APPKEY = os.getenv("NHN_RDS_APPKEY", "")
-NHN_RDS_SECRETKEY = os.getenv("NHN_RDS_SECRETKEY", "")
+NHN_RDS_ACCESS_KEY_ID = os.getenv("NHN_RDS_ACCESS_KEY_ID", "")  # X-TC-AUTHENTICATION-ID
+NHN_RDS_SECRETKEY = os.getenv("NHN_RDS_SECRETKEY", "")  # X-TC-AUTHENTICATION-SECRET
 NHN_RDS_API_BASE = os.getenv(
     "NHN_RDS_API_BASE",
     "https://kr1-rds-mysql.api.nhncloudservice.com",
