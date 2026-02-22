@@ -62,7 +62,7 @@ class LoadBalancerCollector:
         headers = {"X-Auth-Token": token}
         if is_lb_oauth2():
             headers["Authorization"] = f"Bearer {token}"
-        if config.NHN_TENANT_ID and not is_lb_oauth2():
+        elif config.NHN_TENANT_ID:
             headers["X-Tenant-Id"] = config.NHN_TENANT_ID
         base = config.NHN_NETWORK_ENDPOINT.rstrip("/")
 
@@ -77,16 +77,24 @@ class LoadBalancerCollector:
             self._collect_listeners(base, headers, allowed_lb_ids)
         except Exception as e:
             err = str(e)
+            req_url = getattr(getattr(e, "request", None), "url", None) or ""
             if "401" in err:
-                logger.warning(
-                    "LB API 401. Try OAuth2: set NHN_LB_OAUTH2_KEY + NHN_LB_OAUTH2_SECRET (Console > API Security > User Access Key). "
-                    "Else check NHN_TENANT_ID, NHN_USERNAME, NHN_PASSWORD (API password)."
-                )
                 resp = getattr(e, "response", None)
+                logger.warning(
+                    "LB 401 at: %s",
+                    req_url or "(token request – check Keystone/OAuth2 URL and credentials)",
+                )
                 if resp is not None and hasattr(resp, "text") and resp.text:
-                    logger.debug("LB API 401 response: %s", resp.text[:500])
+                    logger.warning(
+                        "LB 401 response body: %s",
+                        resp.text[:500].replace("\n", " "),
+                    )
+                if not req_url and "token" not in err.lower():
+                    logger.warning(
+                        "If using OAuth2, Network API may require Keystone – try NHN_TENANT_ID, NHN_USERNAME, NHN_PASSWORD and clear NHN_LB_OAUTH2_*."
+                    )
             else:
-                logger.error("LB collector error: %s", e)
+                logger.error("LB collector error at %s: %s", req_url or "?", e)
             exporter_scrape_errors.labels(collector="loadbalancer").inc()
 
     def _collect_loadbalancers(self, lb_list: list, allowed_lb_ids: Optional[set]) -> None:

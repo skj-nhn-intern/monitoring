@@ -38,9 +38,11 @@ class OAuth2TokenManager:
         secret = config.NHN_LB_OAUTH2_SECRET
         if not key or not secret:
             raise RuntimeError("NHN_LB_OAUTH2_KEY and NHN_LB_OAUTH2_SECRET required")
+        url = config.NHN_OAUTH2_TOKEN_URL
+        logger.info("LB token: requesting OAuth2 token from %s", url)
         basic = base64.b64encode(f"{key}:{secret}".encode()).decode()
         resp = requests.post(
-            config.NHN_OAUTH2_TOKEN_URL,
+            url,
             headers={
                 "Content-Type": "application/x-www-form-urlencoded",
                 "Authorization": f"Basic {basic}",
@@ -48,6 +50,12 @@ class OAuth2TokenManager:
             data={"grant_type": "client_credentials"},
             timeout=15,
         )
+        if resp.status_code == 401:
+            logger.warning(
+                "LB OAuth2 401 at %s – response: %s",
+                url,
+                (resp.text or resp.reason)[:300],
+            )
         resp.raise_for_status()
         data = resp.json()
         self._token = data["access_token"]
@@ -105,8 +113,16 @@ class TokenManager:
                 },
             }
         }
+        url = config.NHN_AUTH_URL
+        logger.info("LB token: requesting Keystone token from %s", url)
         try:
-            resp = requests.post(config.NHN_AUTH_URL, json=body, timeout=15)
+            resp = requests.post(url, json=body, timeout=15)
+            if resp.status_code == 401:
+                logger.warning(
+                    "LB Keystone 401 at %s – response: %s",
+                    url,
+                    (resp.text or resp.reason)[:300],
+                )
             resp.raise_for_status()
             data = resp.json()["access"]
             self._token = data["token"]["id"]

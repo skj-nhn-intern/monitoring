@@ -60,10 +60,12 @@ from nhncloud_exporter.metrics.rds import (
     rds_deletion_protection,
     rds_instance_ha,
     rds_instance_port,
+    rds_instances,
     rds_instance_status,
     rds_need_migration,
     rds_need_param_apply,
     rds_replication_type,
+    rds_up,
 )
 from nhncloud_exporter.metrics.obs import (
     obs_health_check_duration_seconds,
@@ -116,6 +118,8 @@ __all__ = [
     "cdn_http_3xx",
     "cdn_http_4xx",
     "cdn_http_5xx",
+    "rds_up",
+    "rds_instances",
     "rds_instance_status",
     "rds_instance_ha",
     "rds_replication_type",

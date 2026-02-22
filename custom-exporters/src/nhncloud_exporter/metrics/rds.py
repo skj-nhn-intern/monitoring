@@ -2,6 +2,16 @@
 
 from prometheus_client import Gauge
 
+rds_up = Gauge(
+    "nhncloud_rds_up",
+    "RDS API scrape success (1=ok, 0=fail or skipped)",
+    [],
+)
+rds_instances = Gauge(
+    "nhncloud_rds_instances",
+    "Number of DB instances returned by API",
+    [],
+)
 rds_instance_status = Gauge(
     "nhncloud_rds_instance_status",
     "DB instance status (1=AVAILABLE,2=FAIL_OVER,3=STOPPED,4=ERROR,0=OTHER)",

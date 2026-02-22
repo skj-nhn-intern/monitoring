@@ -15,6 +15,8 @@ from nhncloud_exporter.utils import api_get
 from nhncloud_exporter.metrics import (
     exporter_scrape_errors,
     rds_backup_age_seconds,
+    rds_instances,
+    rds_up,
     rds_backup_count,
     rds_backup_period_days,
     rds_backup_size_bytes,
@@ -88,6 +90,8 @@ class RDSCollector:
             else config.NHN_PASSWORD,
         }
 
+        rds_up.set(0)
+        rds_instances.set(0)
         try:
             # DNS/연결 실패 시 재시도 없이 한 번만 로그 (retry_connection_errors=False)
             inst_data = api_get(
@@ -96,12 +100,44 @@ class RDSCollector:
                 timeout=15,
                 retry_connection_errors=False,
             )
+            header = inst_data.get("header", {})
+            if not header.get("isSuccessful", True) or header.get("resultCode", 0) != 0:
+                logger.warning(
+                    "RDS API returned error: resultCode=%s, resultMessage=%s",
+                    header.get("resultCode"),
+                    header.get("resultMessage", ""),
+                )
+                exporter_scrape_errors.labels(collector="rds").inc()
+                return
+
             db_instances = inst_data.get("dbInstances", [])
+            if not isinstance(db_instances, list):
+                db_instances = []
+
+            rds_up.set(1)
+            rds_instances.set(len(db_instances))
 
             for inst in db_instances:
                 self._collect_instance(inst, base, headers)
 
             self._collect_backups(base, headers, db_instances)
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None:
+                try:
+                    body = e.response.json()
+                    h = body.get("header", {})
+                    logger.warning(
+                        "RDS API HTTP error: %s resultCode=%s %s",
+                        e.response.status_code,
+                        h.get("resultCode"),
+                        h.get("resultMessage", ""),
+                    )
+                except Exception:
+                    logger.warning("RDS API HTTP error: %s", e)
+            else:
+                logger.warning("RDS API HTTP error: %s", e)
+            exporter_scrape_errors.labels(collector="rds").inc()
+            rds_up.set(0)
         except requests.exceptions.ConnectionError as e:
             err = str(e).lower()
             if "resolve" in err or "name or service not known" in err:
@@ -111,14 +147,17 @@ class RDSCollector:
             else:
                 logger.warning("RDS API connection error: %s", e)
             exporter_scrape_errors.labels(collector="rds").inc()
+            rds_up.set(0)
         except requests.exceptions.Timeout:
             logger.warning(
                 "RDS API timeout. Check NHN_RDS_API_BASE or disable with NHN_DISABLE_COLLECTORS=rds"
             )
             exporter_scrape_errors.labels(collector="rds").inc()
+            rds_up.set(0)
         except Exception as e:
             logger.error("RDS collector error: %s", e)
             exporter_scrape_errors.labels(collector="rds").inc()
+            rds_up.set(0)
 
     def _collect_instance(
         self, inst: dict, base: str, headers: dict
