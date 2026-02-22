@@ -9,6 +9,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
+import requests
+
 from nhncloud_exporter import config
 from nhncloud_exporter.auth import get_lb_token, is_lb_oauth2
 from nhncloud_exporter.utils import api_get
@@ -35,6 +37,85 @@ from nhncloud_exporter.metrics import (
 logger = logging.getLogger("nhncloud-exporter")
 
 
+def _lb_step_from_url(url: str) -> str:
+    """실패한 요청 URL에서 단계 이름 추론."""
+    u = (url or "").lower()
+    if "/lbaas/loadbalancers" in u:
+        return "loadbalancers"
+    if "/lbaas/pools/" in u and "/members" in u:
+        return "pool_members"
+    if "/lbaas/pools" in u:
+        return "pools"
+    if "/lbaas/healthmonitors" in u:
+        return "healthmonitors"
+    if "/lbaas/listeners" in u:
+        return "listeners"
+    return "unknown"
+
+
+def _log_lb_error(step: str, url: str, e: Exception) -> None:
+    """LB API 실패 시 원인 파악용 상세 로그."""
+    req_url = getattr(getattr(e, "request", None), "url", None) or url
+    step_label = _lb_step_from_url(str(req_url))
+
+    if isinstance(e, requests.exceptions.HTTPError) and e.response is not None:
+        status = e.response.status_code
+        body = (e.response.text or "")[:400].replace("\n", " ")
+        logger.warning(
+            "LB API 실패 [단계=%s] HTTP %s url=%s",
+            step_label,
+            status,
+            req_url,
+        )
+        logger.warning("LB API 응답 본문: %s", body or "(비어 있음)")
+        if status == 401:
+            logger.warning(
+                "LB 401 진단: 인증 실패. Network API는 Keystone 토큰만 지원합니다. "
+                "NHN_TENANT_ID, NHN_USERNAME, NHN_PASSWORD(API 전용 비밀번호) 설정 후 "
+                "NHN_LB_OAUTH2_KEY/SECRET 는 비우세요."
+            )
+        elif status == 403:
+            logger.warning(
+                "LB 403 진단: 권한 없음. 해당 계정/프로젝트에 Load Balancer API 접근 권한이 있는지 콘솔에서 확인하세요."
+            )
+        elif status == 404:
+            logger.warning(
+                "LB 404 진단: 경로 없음. NHN_NETWORK_ENDPOINT가 LB API 주소인지 확인하세요. "
+                "예: https://kr1-api-network-infrastructure.nhncloudservice.com"
+            )
+        elif status >= 500:
+            logger.warning(
+                "LB %s 진단: 서버 오류. NHN 측 일시 장애일 수 있습니다.", status
+            )
+    elif isinstance(e, requests.exceptions.ConnectionError):
+        logger.warning(
+            "LB API 실패 [단계=%s] 연결 오류 url=%s – %s (NHN_NETWORK_ENDPOINT 도달 가능한지 확인)",
+            step_label,
+            req_url,
+            e,
+        )
+    elif isinstance(e, requests.exceptions.Timeout):
+        logger.warning(
+            "LB API 실패 [단계=%s] 타임아웃 url=%s (네트워크 또는 엔드포인트 확인)",
+            step_label,
+            req_url,
+        )
+    elif isinstance(e, (ValueError, TypeError)):
+        logger.warning(
+            "LB API 실패 [단계=%s] 응답 파싱 오류 url=%s – %s (API가 JSON 대신 HTML 등 반환했을 수 있음, 인증/URL 확인)",
+            step_label,
+            req_url,
+            e,
+        )
+    else:
+        logger.warning(
+            "LB API 실패 [단계=%s] url=%s – %s",
+            step_label,
+            req_url,
+            e,
+        )
+
+
 def _allowed_lb_ids(lb_list: list) -> Optional[set]:
     """NHN_LB_IDS 또는 LB_NAMES가 있으면 해당 LB만, 없으면 None(전체)."""
     if not config.NHN_LB_IDS and not config.LB_NAMES:
@@ -58,17 +139,31 @@ class LoadBalancerCollector:
             logger.debug("LB collector skipped: no NHN_NETWORK_ENDPOINT")
             return
 
-        token = get_lb_token()
+        base = config.NHN_NETWORK_ENDPOINT.rstrip("/")
+        try:
+            token = get_lb_token()
+        except Exception as e:
+            logger.warning(
+                "LB 토큰 발급 실패 – %s (Keystone: NHN_TENANT_ID, NHN_USERNAME, NHN_PASSWORD / OAuth2: NHN_LB_OAUTH2_KEY, NHN_LB_OAUTH2_SECRET 및 URL 확인)",
+                e,
+            )
+            exporter_scrape_errors.labels(collector="loadbalancer").inc()
+            return
+
         headers = {"X-Auth-Token": token}
         if is_lb_oauth2():
             headers["Authorization"] = f"Bearer {token}"
-        elif config.NHN_TENANT_ID:
-            headers["X-Tenant-Id"] = config.NHN_TENANT_ID
-        base = config.NHN_NETWORK_ENDPOINT.rstrip("/")
+            logger.debug("LB auth: OAuth2 (Network API may 401; set NHN_TENANT_ID/USERNAME/PASSWORD to use Keystone)")
+        else:
+            if config.NHN_TENANT_ID:
+                headers["X-Tenant-Id"] = config.NHN_TENANT_ID
+            logger.debug("LB auth: Keystone")
 
         try:
             lb_data = api_get(f"{base}/v2.0/lbaas/loadbalancers", headers)
             lb_list = lb_data.get("loadbalancers", [])
+            if not isinstance(lb_list, list):
+                lb_list = []
             allowed_lb_ids = _allowed_lb_ids(lb_list)
 
             self._collect_loadbalancers(lb_list, allowed_lb_ids)
@@ -76,29 +171,8 @@ class LoadBalancerCollector:
             self._collect_healthmonitors(base, headers, allowed_pool_ids)
             self._collect_listeners(base, headers, allowed_lb_ids)
         except Exception as e:
-            err = str(e)
             req_url = getattr(getattr(e, "request", None), "url", None) or ""
-            if "401" in err:
-                resp = getattr(e, "response", None)
-                logger.warning(
-                    "LB 401 at: %s",
-                    req_url or "(token request – check Keystone/OAuth2 URL and credentials)",
-                )
-                if resp is not None and hasattr(resp, "text") and resp.text:
-                    logger.warning(
-                        "LB 401 response body: %s",
-                        resp.text[:500].replace("\n", " "),
-                    )
-                if req_url and "/lbaas/" in req_url:
-                    logger.warning(
-                        "Network API rejected OAuth2 token. Use Keystone for LB: unset NHN_LB_OAUTH2_KEY and NHN_LB_OAUTH2_SECRET, set NHN_TENANT_ID, NHN_USERNAME, NHN_PASSWORD (API password)."
-                    )
-                elif not req_url or "token" not in err.lower():
-                    logger.warning(
-                        "If 401 was on token URL, check NHN_OAUTH2_TOKEN_URL / Keystone URL and credentials. For LB API, prefer Keystone (NHN_TENANT_ID, NHN_USERNAME, NHN_PASSWORD) and leave NHN_LB_OAUTH2_* unset."
-                    )
-            else:
-                logger.error("LB collector error at %s: %s", req_url or "?", e)
+            _log_lb_error("collect", req_url or base or "", e)
             exporter_scrape_errors.labels(collector="loadbalancer").inc()
 
     def _collect_loadbalancers(self, lb_list: list, allowed_lb_ids: Optional[set]) -> None:

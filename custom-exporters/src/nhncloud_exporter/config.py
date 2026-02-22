@@ -25,14 +25,12 @@ NHN_LB_IDS = [i.strip() for i in os.getenv("NHN_LB_IDS", "").split(",") if i.str
 LB_NAMES = [n.strip() for n in os.getenv("NHN_LB_NAMES", "").split(",") if n.strip()]
 LB_POOL_IDS = [p.strip() for p in os.getenv("NHN_LB_POOL_IDS", "").split(",") if p.strip()]
 
-# CDN
-NHN_CDN_APPKEY = os.getenv("NHN_CDN_APPKEY", "")
-NHN_CDN_SECRETKEY = os.getenv("NHN_CDN_SECRETKEY", "")
-# 문서 기준 CDN Public API 도메인은 리전 없음. kr1-cdn 사용 시 statistics API 404 발생 가능.
-NHN_CDN_API_BASE = os.getenv(
-    "NHN_CDN_API_BASE",
-    "https://cdn.api.nhncloudservice.com",
-)
+# CDN – 외부 URL 상태만 체크 (API 미사용). 쉼표 구분 공개 URL (브라우저에서 여는 주소).
+NHN_CDN_HEALTH_CHECK_URLS = [
+    u.strip()
+    for u in os.getenv("NHN_CDN_HEALTH_CHECK_URLS", "").split(",")
+    if u.strip()
+]
 
 # RDS (API Security: User Access Key ID + Secret Access Key)
 NHN_RDS_APPKEY = os.getenv("NHN_RDS_APPKEY", "")
