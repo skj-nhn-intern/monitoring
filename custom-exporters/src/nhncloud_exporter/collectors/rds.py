@@ -2,10 +2,13 @@
 RDS for MySQL collector.
 
 NHN Cloud RDS v3.0 API: DB instance status, HA, backups.
+수집 간격은 RDS_SCRAPE_INTERVAL(기본 5분). DNS/연결 오류 시 재시도 없이 한 번만 로그.
 """
 
 import logging
 from datetime import datetime, timezone
+
+import requests
 
 from nhncloud_exporter import config
 from nhncloud_exporter.utils import api_get
@@ -73,13 +76,33 @@ class RDSCollector:
         base = config.NHN_RDS_API_BASE.rstrip("/")
 
         try:
-            inst_data = api_get(f"{base}/v3.0/db-instances", headers)
+            # DNS/연결 실패 시 재시도 없이 한 번만 로그 (retry_connection_errors=False)
+            inst_data = api_get(
+                f"{base}/v3.0/db-instances",
+                headers,
+                timeout=15,
+                retry_connection_errors=False,
+            )
             db_instances = inst_data.get("dbInstances", [])
 
             for inst in db_instances:
                 self._collect_instance(inst, base, headers)
 
             self._collect_backups(base, headers, db_instances)
+        except requests.exceptions.ConnectionError as e:
+            err = str(e).lower()
+            if "resolve" in err or "name or service not known" in err:
+                logger.warning(
+                    "RDS API unreachable (DNS). Check NHN_RDS_API_BASE or set NHN_DISABLE_COLLECTORS=rds"
+                )
+            else:
+                logger.warning("RDS API connection error: %s", e)
+            exporter_scrape_errors.labels(collector="rds").inc()
+        except requests.exceptions.Timeout:
+            logger.warning(
+                "RDS API timeout. Check NHN_RDS_API_BASE or disable with NHN_DISABLE_COLLECTORS=rds"
+            )
+            exporter_scrape_errors.labels(collector="rds").inc()
         except Exception as e:
             logger.error("RDS collector error: %s", e)
             exporter_scrape_errors.labels(collector="rds").inc()

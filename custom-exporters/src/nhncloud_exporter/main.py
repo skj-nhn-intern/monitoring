@@ -35,13 +35,20 @@ def _obs_health_check_loop() -> None:
 
 
 def run_collectors() -> None:
-    """Run all collectors in a loop with SCRAPE_INTERVAL."""
-    collectors = [
+    """Run collectors in a loop. LB/CDN: SCRAPE_INTERVAL, RDS: RDS_SCRAPE_INTERVAL(기본 5분)."""
+    all_collectors = [
         ("loadbalancer", LoadBalancerCollector()),
         ("cdn", CDNCollector()),
         ("rds", RDSCollector()),
     ]
+    disabled = config.DISABLE_COLLECTORS
+    collectors = [(n, c) for n, c in all_collectors if n not in disabled]
     logger = logging.getLogger("nhncloud-exporter")
+    if disabled:
+        logger.info("Disabled collectors: %s", sorted(disabled))
+
+    # RDS는 RDS_SCRAPE_INTERVAL마다만 실행 (DB 상태는 자주 안 바뀌고, DNS 오류 시 로그 스팸 완화)
+    last_rds_run = 0.0
 
     if config.NHN_OBS_TARGETS:
         obs_thread = threading.Thread(
@@ -56,8 +63,20 @@ def run_collectors() -> None:
             config.NHN_OBS_TARGETS,
         )
 
+    if "rds" not in disabled and config.NHN_RDS_APPKEY:
+        logger.info(
+            "RDS collector interval: %ds (SCRAPE_INTERVAL=%ds for LB/CDN)",
+            config.RDS_SCRAPE_INTERVAL,
+            config.SCRAPE_INTERVAL,
+        )
+
     while True:
+        now = time.time()
         for name, collector in collectors:
+            if name == "rds":
+                if now - last_rds_run < config.RDS_SCRAPE_INTERVAL:
+                    continue
+                last_rds_run = now
             start = time.time()
             try:
                 collector.collect()

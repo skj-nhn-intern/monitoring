@@ -32,13 +32,22 @@ NHN_RDS_API_BASE = os.getenv(
     "NHN_RDS_API_BASE",
     "https://kr1-api-mysql.rds.nhncloudservice.com",
 )
+# RDS 수집 간격(초). DB 상태/백업은 자주 안 바뀌므로 기본 300(5분). DNS 오류 시 로그 스팸 완화
+RDS_SCRAPE_INTERVAL = int(os.getenv("RDS_SCRAPE_INTERVAL", "300"))
 
 # Object Storage (OBS) – API health check, 30s interval, multiple targets (replicated objects)
+# URL 형식: base + /v1/AUTH_tenant_id + / + target → target은 반드시 container 또는 container/object_key
 NHN_OBS_API_URL = os.getenv(
     "NHN_OBS_API_URL",
     "",
 ).rstrip("/")
-# Comma-separated targets: container or container/object_key (e.g. "bucket1,bucket2/backup.dat")
+# Multiple OBS API URLs (리전 무관): 쉼표 구분. 미설정 시 NHN_OBS_API_URL 1개 또는 토큰 카탈로그 사용
+NHN_OBS_API_URLS = [
+    u.strip().rstrip("/")
+    for u in os.getenv("NHN_OBS_API_URLS", "").split(",")
+    if u.strip()
+]
+# Comma-separated targets: container or container/object_key (e.g. "photo,bucket2,bucket2/backup.dat")
 NHN_OBS_TARGETS = [
     t.strip()
     for t in os.getenv("NHN_OBS_TARGETS", "").split(",")
@@ -50,6 +59,12 @@ OBS_HEALTH_CHECK_INTERVAL = int(os.getenv("OBS_HEALTH_CHECK_INTERVAL", "30"))
 EXPORTER_PORT = int(os.getenv("EXPORTER_PORT", "9101"))
 SCRAPE_INTERVAL = int(os.getenv("SCRAPE_INTERVAL", "60"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+# Disable specific collectors (comma-separated: loadbalancer, cdn, rds) to avoid 401/404/DNS errors
+DISABLE_COLLECTORS = {
+    s.strip().lower()
+    for s in os.getenv("NHN_DISABLE_COLLECTORS", "").split(",")
+    if s.strip()
+}
 
 
 def setup_logging() -> logging.Logger:
