@@ -116,23 +116,36 @@ services:
     networks:
       - monitoring
 
-  # 7. NHN Cloud Exporter
-  # nhn-cloud-exporter:
-  #   build: ./nhn-cloud-exporter
-  #   container_name: nhn-cloud-exporter
-  #   ports:
-  #     - "8000:8000"
-  #   env_file:
-  #     - ./nhn-cloud-exporter/.env
-  #   restart: always
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 5s
-  #   networks:
-  #     - monitoring
+  # 7. NHN Cloud Exporter (LB, CDN, RDS 메트릭)
+  nhn-cloud-exporter:
+    build: ./custom-exporters
+    container_name: nhn-cloud-exporter
+    ports:
+      - "9101:9101"
+    env_file:
+      - .env
+    environment:
+      - EXPORTER_PORT=9101
+      - SCRAPE_INTERVAL=60
+      - LOG_LEVEL=INFO
+      # NHN Cloud 인증 (필요 시 .env에 설정)
+      - NHN_TENANT_ID=${NHN_TENANT_ID:-}
+      - NHN_USERNAME=${NHN_USERNAME:-}
+      - NHN_PASSWORD=${NHN_PASSWORD:-}
+      - NHN_NETWORK_ENDPOINT=${NHN_NETWORK_ENDPOINT:-}
+      - NHN_CDN_APPKEY=${NHN_CDN_APPKEY:-}
+      - NHN_CDN_SECRETKEY=${NHN_CDN_SECRETKEY:-}
+      - NHN_RDS_APPKEY=${NHN_RDS_APPKEY:-}
+      - NHN_RDS_SECRETKEY=${NHN_RDS_SECRETKEY:-}
+    restart: always
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9101/metrics', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - monitoring
 
 configs:
   loki_config:

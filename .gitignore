@@ -1,2 +1,5 @@
 .env
 .sample
+custom-exporters/.venv
+custom-exporters/__pycache__
+custom-exporters/**/__pycache__

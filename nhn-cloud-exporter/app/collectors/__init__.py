@@ -1,3 +1,0 @@
-"""
-NHN Cloud Metrics Collectors
-"""
