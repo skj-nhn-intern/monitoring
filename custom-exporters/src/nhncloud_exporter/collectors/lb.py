@@ -226,11 +226,11 @@ class LoadBalancerCollector:
             )
             members = members_data.get("members", [])
             total = len(members)
-            healthy = sum(
-                1
-                for m in members
-                if m.get("operating_status", "").upper() == "ONLINE"
-            )
+            # NHN Cloud는 정상 멤버에 operating_status "ACTIVE" 또는 "ONLINE" 반환
+            def _member_healthy(m: dict) -> bool:
+                status = (m.get("operating_status") or "").upper()
+                return status in ("ONLINE", "ACTIVE")
+            healthy = sum(1 for m in members if _member_healthy(m))
             unhealthy = total - healthy
 
             pool_member_count.labels(
@@ -253,7 +253,7 @@ class LoadBalancerCollector:
                     "lb_name": parent_lb_name,
                 }
                 member_status.labels(**labels).set(
-                    1 if m.get("operating_status", "").upper() == "ONLINE" else 0
+                    1 if _member_healthy(m) else 0
                 )
                 member_admin_up.labels(**labels).set(
                     1 if m.get("admin_state_up", False) else 0
