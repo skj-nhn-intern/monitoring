@@ -7,6 +7,7 @@ services:
       - "9090:9090"
     volumes:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./config/alerts:/etc/prometheus/alerts
       - prometheus_data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -96,8 +97,12 @@ services:
     container_name: grafana
     ports:
       - "3000:3000"
+    environment:
+      # 알림/이메일 등에 들어가는 대시보드 링크의 베이스 URL (localhost 대신 사용할 주소)
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://133.186.251.230/:3000}
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
     restart: always
     networks:
       - monitoring

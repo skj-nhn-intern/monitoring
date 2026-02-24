@@ -9,7 +9,7 @@ alerting:
         - targets:
             - alertmanager:9093
 
-# 알림 규칙 (필요 시 rules 파일 추가)
+# 알림 규칙 (필요 시 rules 파일 추가 후 config/alerts 마운트 활용)
 rule_files:
   # - "alerts/*.yml"
 
