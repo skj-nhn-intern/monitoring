@@ -26,9 +26,9 @@
 | `nhncloud_lb_pool_member_total` | Gauge | `pool_id`, `pool_name`, `lb_name` | 풀 멤버 총 개수 |
 | `nhncloud_lb_pool_member_healthy` | Gauge | `pool_id`, `pool_name`, `lb_name` | 정상 멤버 수 (operating_status=ONLINE 또는 ACTIVE) |
 | `nhncloud_lb_pool_member_unhealthy` | Gauge | `pool_id`, `pool_name`, `lb_name` | 비정상 멤버 수 |
-| `nhncloud_lb_member_operating_status` | Gauge | `pool_id`, `pool_name`, `member_id`, `member_address`, `member_port`, `lb_name` | 멤버 동작 상태 (1=ONLINE/ACTIVE, 0=기타) |
-| `nhncloud_lb_member_admin_state_up` | Gauge | `pool_id`, `pool_name`, `member_id`, `member_address`, `member_port`, `lb_name` | 멤버 관리자 Up (1/0) |
-| `nhncloud_lb_member_weight` | Gauge | `pool_id`, `pool_name`, `member_id`, `member_address`, `member_port`, `lb_name` | 멤버 가중치 |
+| `nhncloud_lb_member_operating_status` | Gauge | `pool_id`, `pool_name`, `member_id`, `member_address`, `member_port`, `lb_name` | **현재 실행 중인 멤버만** (1=ONLINE/ACTIVE, 매 스크래핑 갱신·추이 반영) |
+| `nhncloud_lb_member_admin_state_up` | Gauge | `pool_id`, `pool_name`, `member_id`, `member_address`, `member_port`, `lb_name` | **현재 실행 중인 멤버만** (1=up, 매 스크래핑 갱신·추이 반영) |
+| `nhncloud_lb_member_weight` | Gauge | `pool_id`, `pool_name`, `member_id`, `member_address`, `member_port`, `lb_name` | **현재 실행 중인 멤버만** (가중치, 매 스크래핑 갱신·추이 반영) |
 | `nhncloud_lb_healthmonitor_admin_state_up` | Gauge | `hm_id`, `pool_id` | 헬스모니터 관리자 상태 (1/0) |
 | `nhncloud_lb_healthmonitor_delay_seconds` | Gauge | `hm_id`, `pool_id` | 헬스체크 간격(초) |
 | `nhncloud_lb_healthmonitor_timeout_seconds` | Gauge | `hm_id`, `pool_id` | 헬스체크 타임아웃(초) |
@@ -36,6 +36,11 @@
 | `nhncloud_lb_listener` | Info | `listener_id`, `lb_name` | 리스너 메타정보 (protocol, port, default_pool_id) |
 | `nhncloud_lb_listener_connection_limit` | Gauge | `listener_id`, `protocol`, `port`, `lb_name` | 리스너 연결 제한 |
 | `nhncloud_lb_listener_cert_expire_days` | Gauge | `listener_id`, `lb_name` | TLS 인증서 만료까지 일수 |
+
+**멤버 메트릭 (member_operating_status, member_admin_state_up, member_weight)**  
+- **현재 실행 중인 멤버만** 노출: `operating_status`가 ONLINE/ACTIVE 이고 `admin_state_up`가 true인 멤버만 시리즈로 내보냅니다.  
+- 매 스크래핑 시 해당 풀의 기존 멤버 시리즈를 제거한 뒤 실행 중인 멤버만 다시 설정하므로, 멤버가 내려가면 시리즈가 사라지고 올라오면 다시 나타나 **추이(트렌드)**를 볼 수 있습니다.  
+- 풀 단위 집계는 기존대로 `nhncloud_lb_pool_member_total` / `_healthy` / `_unhealthy`로 전체·정상·비정상 개수 추이 확인 가능합니다.
 
 ## RDS (MySQL)
 

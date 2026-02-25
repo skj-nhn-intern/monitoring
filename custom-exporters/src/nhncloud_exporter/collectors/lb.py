@@ -133,6 +133,21 @@ def _log_lb_error(step: str, url: str, e: Exception) -> None:
         )
 
 
+def _clear_pool_member_series(pool_id: str, lb_name: str) -> None:
+    """해당 풀에 속한 멤버 시리즈만 제거하여, 이번 스크래핑에서 running 멤버만 다시 남기기 위함."""
+    for gauge in (member_status, member_admin_up, member_weight):
+        # Gauge._metrics 키 순서: (pool_id, pool_name, member_id, member_address, member_port, lb_name)
+        to_remove = [
+            k for k in list(getattr(gauge, "_metrics", {}).keys())
+            if len(k) >= 6 and k[0] == pool_id and k[5] == lb_name
+        ]
+        for k in to_remove:
+            try:
+                gauge.remove(*k)
+            except KeyError:
+                pass
+
+
 def _allowed_lb_ids(lb_list: list) -> Optional[set]:
     """NHN_LB_IDS 또는 LB_NAMES가 있으면 해당 LB만, 없으면 None(전체)."""
     if not config.NHN_LB_IDS and not config.LB_NAMES:
@@ -308,7 +323,16 @@ class LoadBalancerCollector:
                 pool_id=pool_id, pool_name=pool_name, lb_name=parent_lb_name
             ).set(unhealthy)
 
+            # 현재 실행 중인 멤버만 멤버 단위 메트릭으로 노출 (추이: 스크래핑마다 갱신되어 리스트가 바뀜)
+            def _member_running(m: dict) -> bool:
+                return _member_healthy(m) and bool(m.get("admin_state_up", False))
+
+            # 이 풀에 대한 기존 멤버 시리즈 제거 → 이번 스크래핑에서 running 만 다시 설정
+            _clear_pool_member_series(pool_id, parent_lb_name)
+
             for m in members:
+                if not _member_running(m):
+                    continue
                 labels = {
                     "pool_id": pool_id,
                     "pool_name": pool_name,
@@ -317,12 +341,8 @@ class LoadBalancerCollector:
                     "member_port": str(m.get("protocol_port", "")),
                     "lb_name": parent_lb_name,
                 }
-                member_status.labels(**labels).set(
-                    1 if _member_healthy(m) else 0
-                )
-                member_admin_up.labels(**labels).set(
-                    1 if m.get("admin_state_up", False) else 0
-                )
+                member_status.labels(**labels).set(1)
+                member_admin_up.labels(**labels).set(1)
                 member_weight.labels(**labels).set(m.get("weight", 1))
         return allowed_pool_ids
 

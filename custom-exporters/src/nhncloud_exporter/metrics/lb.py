@@ -74,17 +74,17 @@ pool_unhealthy_member_count = Gauge(
 
 member_status = Gauge(
     "nhncloud_lb_member_operating_status",
-    "Member operating status (1=ONLINE,0=other)",
+    "Member operating status - only exported for currently running members (1=ONLINE, trend by scrape)",
     ["pool_id", "pool_name", "member_id", "member_address", "member_port", "lb_name"],
 )
 member_admin_up = Gauge(
     "nhncloud_lb_member_admin_state_up",
-    "Member admin state",
+    "Member admin state - only exported for currently running members (1=up, trend by scrape)",
     ["pool_id", "pool_name", "member_id", "member_address", "member_port", "lb_name"],
 )
 member_weight = Gauge(
     "nhncloud_lb_member_weight",
-    "Member weight",
+    "Member weight - only exported for currently running members (trend by scrape)",
     ["pool_id", "pool_name", "member_id", "member_address", "member_port", "lb_name"],
 )
 
