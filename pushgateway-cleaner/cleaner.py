@@ -15,11 +15,12 @@ PUSHGATEWAY_HOST = os.environ.get("PUSHGATEWAY_HOST", "pushgateway")
 PUSHGATEWAY_PORT = int(os.environ.get("PUSHGATEWAY_PORT", "9091"))
 STALE_SECONDS = int(os.environ.get("STALE_SECONDS", "60"))
 CHECK_INTERVAL = int(os.environ.get("CHECK_INTERVAL", "20"))
+DEBUG = os.environ.get("DEBUG", "").lower() in ("1", "true", "yes")
 BASE_URL = f"http://{PUSHGATEWAY_HOST}:{PUSHGATEWAY_PORT}"
 
-# Pushgateway exposes push time (name may be pushgateway_metric_push_time_seconds or push_time_seconds)
+# Pushgateway uses exactly "push_time_seconds" (see storage/diskmetricstore.go)
 PUSH_TIME_PATTERN = re.compile(
-    r"(?:pushgateway_metric_)?push_time_seconds\{([^}]*)\}\s+([\d.eE+-]+)"
+    r"push_time_seconds\{([^}]*)\}\s+([\d.eE+-]+)"
 )
 
 
@@ -42,10 +43,12 @@ def labels_to_delete_path(labels: dict) -> str | None:
     job = labels.get("job")
     if not job:
         return None
-    # URL path: /metrics/job/<job>/instance/<instance>/<ln>/<lv>/...
+    # Pushgateway API: DELETE /metrics/job/<job> when no instance, or /metrics/job/<job>/instance/<id> when instance set.
+    # When instance is "" we must NOT add /instance/ to the path.
     parts = ["/metrics/job", urllib.parse.quote(job, safe="")]
-    if labels.get("instance") is not None:
-        parts.extend(["instance", urllib.parse.quote(labels["instance"], safe="")])
+    instance = labels.get("instance")
+    if instance:
+        parts.extend(["instance", urllib.parse.quote(instance, safe="")])
     for k, v in sorted(labels.items()):
         if k in ("job", "instance"):
             continue
@@ -88,15 +91,22 @@ def run_once(now: float) -> int:
             push_ts = float(value_str)
         except ValueError:
             continue
-        if now - push_ts <= STALE_SECONDS:
+        age = now - push_ts
+        if age <= STALE_SECONDS:
+            if DEBUG:
+                print(f"[cleaner] skip (age={age:.0f}s <= {STALE_SECONDS}s): {label_str}", flush=True)
             continue
         labels = parse_labels(label_str)
         path = labels_to_delete_path(labels)
         if not path:
             continue
+        if DEBUG:
+            print(f"[cleaner] deleting stale (age={age:.0f}s): {path}", flush=True)
         if delete_group(path):
             deleted += 1
             print(f"[cleaner] deleted stale group: {path}", flush=True)
+        elif DEBUG:
+            print(f"[cleaner] delete returned false for: {path}", flush=True)
     return deleted
 
 
