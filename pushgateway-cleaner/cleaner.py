@@ -116,8 +116,10 @@ def run_once(now: float) -> int:
         # Metric might be in different format (e.g. different spacing)
         print(f"[cleaner] push_time found in body but regex did not match. Sample:\n{body[:800]}", flush=True)
     elif not matches:
-        if DEBUG:
-            print(f"[cleaner] no push_time_seconds groups found (empty or no pushes yet)", flush=True)
+        has_any = "push_time" in body
+        print(f"[cleaner] run: 0 groups (response {len(body)} bytes, 'push_time' in body: {has_any})", flush=True)
+        if has_any:
+            print(f"[cleaner] sample of /metrics (first 600 chars):\n{body[:600]}", flush=True)
         return 0
 
     deleted = 0
