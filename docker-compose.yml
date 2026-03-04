@@ -21,8 +21,25 @@ services:
   pushgateway:
     image: prom/pushgateway:latest
     container_name: pushgateway
-    # 호스트에는 프록시만 노출 (PUT→POST 변환용)
+    command:
+      # 메모리만 사용(기본), 디스크 미사용으로 I/O 최소화
+      - --persistence.file=
     restart: always
+    networks:
+      - monitoring
+
+  # 2-0. Pushgateway cleaner (60초 미갱신 메트릭 그룹 자동 삭제)
+  pushgateway-cleaner:
+    build: ./pushgateway-cleaner
+    container_name: pushgateway-cleaner
+    environment:
+      - PUSHGATEWAY_HOST=pushgateway
+      - PUSHGATEWAY_PORT=9091
+      - STALE_SECONDS=60
+      - CHECK_INTERVAL=20
+    restart: always
+    depends_on:
+      - pushgateway
     networks:
       - monitoring
 

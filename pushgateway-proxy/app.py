@@ -2,9 +2,11 @@
 """
 Proxy in front of Pushgateway: converts PUT to POST so clients that use PUT can push metrics.
 Pushgateway only supports POST for push; GET and DELETE are passed through as-is.
+Optimized: single persistent connection to Pushgateway (keep-alive).
 """
 import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.client import HTTPConnection, HTTPException
 import urllib.request
 import urllib.error
 
@@ -12,21 +14,39 @@ import urllib.error
 LISTEN_PORT = int(os.environ.get("PORT", "9091"))
 PUSHGATEWAY_HOST = os.environ.get("PUSHGATEWAY_HOST", "pushgateway")
 PUSHGATEWAY_PORT = int(os.environ.get("PUSHGATEWAY_PORT", "9091"))
+REQUEST_TIMEOUT = 30
+
+_connection: HTTPConnection | None = None
+
+
+def get_connection() -> HTTPConnection:
+    global _connection
+    if _connection is not None:
+        return _connection
+    _connection = HTTPConnection(PUSHGATEWAY_HOST, PUSHGATEWAY_PORT, timeout=REQUEST_TIMEOUT)
+    return _connection
 
 
 def forward(method: str, path: str, body: bytes, headers: dict) -> tuple[int, dict, bytes]:
     """Forward request to Pushgateway. Use POST when method is PUT."""
     out_method = "POST" if method == "PUT" else method
-    url = f"http://{PUSHGATEWAY_HOST}:{PUSHGATEWAY_PORT}{path}"
-    req_headers = {k: v for k, v in headers.items() if k.lower() not in ("host", "connection")}
-    req = urllib.request.Request(url, data=body if body else None, headers=req_headers, method=out_method)
+    conn = get_connection()
+    skip_headers = {"host", "connection", "transfer-encoding"}
+    req_headers = {k: v for k, v in headers.items() if k.lower() not in skip_headers}
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return resp.status, dict(resp.headers), resp.read()
-    except urllib.error.HTTPError as e:
-        return e.code, dict(e.headers), e.read()
-    except urllib.error.URLError as e:
-        raise RuntimeError(str(e.reason))
+        conn.request(out_method, path, body=body if body else None, headers=req_headers)
+        resp = conn.getresponse()
+        out_body = resp.read()
+        resp_headers = {k: v for k, v in resp.headers.items() if k.lower() not in skip_headers}
+        return resp.status, resp_headers, out_body
+    except (OSError, HTTPException) as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        global _connection
+        _connection = None
+        raise RuntimeError(str(e))
 
 
 class ProxyHandler(BaseHTTPRequestHandler):

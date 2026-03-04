@@ -22,6 +22,7 @@ scrape_configs:
 
   # Pushgateway (배치/단기 작업에서 push한 메트릭 수집)
   - job_name: pushgateway
+    scrape_interval: 30s
     honor_labels: true
     static_configs:
       - targets:
