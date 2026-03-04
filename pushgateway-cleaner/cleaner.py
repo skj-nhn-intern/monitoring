@@ -148,8 +148,8 @@ def run_once(now: float) -> int:
         else:
             print(f"[cleaner] delete failed (see above): {path}", flush=True)
 
-    if stale_count > 0 or deleted > 0:
-        print(f"[cleaner] run: {len(matches)} groups, {stale_count} stale, {deleted} deleted", flush=True)
+    # Always log run summary so logs show activity every CHECK_INTERVAL
+    print(f"[cleaner] run: {len(matches)} groups, {stale_count} stale, {deleted} deleted", flush=True)
     return deleted
 
 
