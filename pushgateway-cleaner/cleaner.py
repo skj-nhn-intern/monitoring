@@ -19,8 +19,12 @@ DEBUG = os.environ.get("DEBUG", "").lower() in ("1", "true", "yes")
 BASE_URL = f"http://{PUSHGATEWAY_HOST}:{PUSHGATEWAY_PORT}"
 
 # Pushgateway uses exactly "push_time_seconds" (see storage/diskmetricstore.go)
+# Match line like: push_time_seconds{job="x",instance=""} 1.73e+09
 PUSH_TIME_PATTERN = re.compile(
-    r"push_time_seconds\{([^}]*)\}\s+([\d.eE+-]+)"
+    r"push_time_seconds\s*\{([^}]*)\}\s+([\d.eE+-]+)"
+)
+PUSH_TIME_LINE = re.compile(
+    r"^\s*push_time_seconds\s*\{([^}]*)\}\s+([\d.eE+-]+)"
 )
 
 
@@ -43,8 +47,8 @@ def labels_to_delete_path(labels: dict) -> str | None:
     job = labels.get("job")
     if not job:
         return None
-    # Pushgateway API: DELETE /metrics/job/<job> when no instance, or /metrics/job/<job>/instance/<id> when instance set.
-    # When instance is "" we must NOT add /instance/ to the path.
+    # Grouping key is from URL labels only. Push to /metrics/job/X has key {job:X}; push to
+    # /metrics/job/X/instance/Y has key {job:X, instance:Y}. So only add instance to path when non-empty.
     parts = ["/metrics/job", urllib.parse.quote(job, safe="")]
     instance = labels.get("instance")
     if instance:
@@ -63,19 +67,36 @@ def fetch_metrics() -> str:
 
 
 def delete_group(path: str) -> bool:
+    """Send DELETE for the given path. Returns True if deleted or already gone (404)."""
     url = f"{BASE_URL}{path}"
     req = urllib.request.Request(url, method="DELETE")
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
             return 200 <= resp.status < 300
     except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")[:200]
+        print(f"[cleaner] DELETE {path} -> HTTP {e.code} body: {body}", flush=True)
         if e.code == 404:
             return True
-        print(f"[cleaner] DELETE {path} failed: {e.code}", flush=True)
         return False
     except Exception as e:
         print(f"[cleaner] DELETE {path} error: {e}", flush=True)
         return False
+
+
+def delete_group_with_fallback(labels: dict) -> bool:
+    """Delete by path from labels. If instance is empty, try both /job/X and /job/X/instance/."""
+    path = labels_to_delete_path(labels)
+    if not path:
+        return False
+    if delete_group(path):
+        return True
+    # Push may have used /job/X/instance/ (empty instance); try that if we only sent /job/X
+    if not labels.get("instance") and path.count("/") == 3:  # /metrics/job/X
+        path_with_instance = f"{path}/instance/"
+        if delete_group(path_with_instance):
+            return True
+    return False
 
 
 def run_once(now: float) -> int:
@@ -84,8 +105,24 @@ def run_once(now: float) -> int:
     except Exception as e:
         print(f"[cleaner] fetch metrics failed: {e}", flush=True)
         return 0
+
+    matches = list(PUSH_TIME_PATTERN.finditer(body))
+    if not matches:
+        for line in body.splitlines():
+            m = PUSH_TIME_LINE.match(line)
+            if m:
+                matches.append(m)
+    if not matches and "push_time" in body:
+        # Metric might be in different format (e.g. different spacing)
+        print(f"[cleaner] push_time found in body but regex did not match. Sample:\n{body[:800]}", flush=True)
+    elif not matches:
+        if DEBUG:
+            print(f"[cleaner] no push_time_seconds groups found (empty or no pushes yet)", flush=True)
+        return 0
+
     deleted = 0
-    for m in PUSH_TIME_PATTERN.finditer(body):
+    stale_count = 0
+    for m in matches:
         label_str, value_str = m.group(1), m.group(2)
         try:
             push_ts = float(value_str)
@@ -96,17 +133,23 @@ def run_once(now: float) -> int:
             if DEBUG:
                 print(f"[cleaner] skip (age={age:.0f}s <= {STALE_SECONDS}s): {label_str}", flush=True)
             continue
+        stale_count += 1
         labels = parse_labels(label_str)
         path = labels_to_delete_path(labels)
         if not path:
+            if DEBUG:
+                print(f"[cleaner] no path for labels: {labels}", flush=True)
             continue
         if DEBUG:
             print(f"[cleaner] deleting stale (age={age:.0f}s): {path}", flush=True)
-        if delete_group(path):
+        if delete_group_with_fallback(labels):
             deleted += 1
-            print(f"[cleaner] deleted stale group: {path}", flush=True)
-        elif DEBUG:
-            print(f"[cleaner] delete returned false for: {path}", flush=True)
+            print(f"[cleaner] deleted: {path}", flush=True)
+        else:
+            print(f"[cleaner] delete failed (see above): {path}", flush=True)
+
+    if stale_count > 0 or deleted > 0:
+        print(f"[cleaner] run: {len(matches)} groups, {stale_count} stale, {deleted} deleted", flush=True)
     return deleted
 
 
