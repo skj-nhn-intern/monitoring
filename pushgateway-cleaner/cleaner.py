@@ -124,13 +124,19 @@ def run_once(now: float) -> int:
 
     deleted = 0
     stale_count = 0
+    oldest_age = None  # for diagnostic when 0 stale
     for m in matches:
         label_str, value_str = m.group(1), m.group(2)
         try:
             push_ts = float(value_str)
         except ValueError:
             continue
+        # Pushgateway uses Unix seconds; if value is > 1e12 it's likely milliseconds
+        if push_ts > 1e12:
+            push_ts = push_ts / 1000.0
         age = now - push_ts
+        if oldest_age is None or age > oldest_age:
+            oldest_age = age
         if age <= STALE_SECONDS:
             if DEBUG:
                 print(f"[cleaner] skip (age={age:.0f}s <= {STALE_SECONDS}s): {label_str}", flush=True)
@@ -150,8 +156,11 @@ def run_once(now: float) -> int:
         else:
             print(f"[cleaner] delete failed (see above): {path}", flush=True)
 
-    # Always log run summary so logs show activity every CHECK_INTERVAL
-    print(f"[cleaner] run: {len(matches)} groups, {stale_count} stale, {deleted} deleted", flush=True)
+    # Always log run summary; if we had groups but 0 stale, show oldest age for debugging
+    msg = f"[cleaner] run: {len(matches)} groups, {stale_count} stale, {deleted} deleted"
+    if len(matches) > 0 and stale_count == 0 and oldest_age is not None:
+        msg += f" (oldest group age: {oldest_age:.0f}s)"
+    print(msg, flush=True)
     return deleted
 
 
