@@ -12,6 +12,7 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=14d
       - --web.enable-lifecycle
     restart: always
     networks:
@@ -207,6 +208,11 @@ configs:
         allow_structured_metadata: true
         reject_old_samples: true
         reject_old_samples_max_age: 168h
+        retention_period: 336h
+      compactor:
+        working_directory: /loki/compactor
+        retention_enabled: true
+        retention_delete_delay: 2h
 
   promtail_config:
     content: |
