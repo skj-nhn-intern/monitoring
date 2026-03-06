@@ -14,6 +14,7 @@ services:
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=14d
       - --web.enable-lifecycle
+      - --web.enable-admin-api
     restart: always
     networks:
       - monitoring
