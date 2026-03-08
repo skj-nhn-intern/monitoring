@@ -45,7 +45,7 @@ def run_collectors() -> None:
     collectors = [(n, c) for n, c in all_collectors if n not in disabled]
     logger = logging.getLogger("nhncloud-exporter")
     if disabled:
-        logger.info("Disabled collectors: %s", sorted(disabled))
+        logger.debug("Disabled collectors: %s", sorted(disabled))
 
     # RDS는 RDS_SCRAPE_INTERVAL마다만 실행 (DB 상태는 자주 안 바뀌고, DNS 오류 시 로그 스팸 완화)
     last_rds_run = 0.0
@@ -57,14 +57,14 @@ def run_collectors() -> None:
             daemon=True,
         )
         obs_thread.start()
-        logger.info(
+        logger.debug(
             "OBS health check started (interval=%ds, urls=%d)",
             config.OBS_HEALTH_CHECK_INTERVAL,
             len(config.OBS_PUBLIC_HEALTH_CHECK_URLS),
         )
 
     if "rds" not in disabled and config.NHN_RDS_APPKEY:
-        logger.info(
+        logger.debug(
             "RDS collector interval: %ds (SCRAPE_INTERVAL=%ds for LB/CDN)",
             config.RDS_SCRAPE_INTERVAL,
             config.SCRAPE_INTERVAL,
@@ -82,7 +82,7 @@ def run_collectors() -> None:
                 collector.collect()
                 duration = time.time() - start
                 exporter_scrape_duration.labels(collector=name).observe(duration)
-                logger.info("Collector '%s' completed in %.2fs", name, duration)
+                logger.debug("Collector '%s' completed in %.2fs", name, duration)
             except Exception as e:
                 exporter_scrape_errors.labels(collector=name).inc()
                 logger.error("Collector '%s' failed: %s", name, e)
@@ -95,13 +95,13 @@ def main() -> None:
     """Configure logging, start HTTP server, pre-auth, run collector loop."""
     logger = config.setup_logging()
 
-    logger.info("=" * 60)
-    logger.info("NHN Cloud Prometheus Exporter starting...")
-    logger.info("Port: %d | Interval: %ds", config.EXPORTER_PORT, config.SCRAPE_INTERVAL)
-    logger.info("=" * 60)
-
+    logger.info(
+        "NHN Cloud Exporter starting port=%d interval=%ds",
+        config.EXPORTER_PORT,
+        config.SCRAPE_INTERVAL,
+    )
     if config.NHN_NETWORK_ENDPOINT:
-        logger.info(
+        logger.debug(
             "LB auth: %s",
             "OAuth2 (User Access Key)" if is_lb_oauth2() else "Keystone (tenant/user/password)",
         )
@@ -110,12 +110,12 @@ def main() -> None:
             "NHN_TENANT_ID or NHN_USERNAME not set - LB/OBS collectors may fail"
         )
     if config.NHN_OBS_TARGETS and not config.NHN_OBS_API_URL:
-        logger.info(
+        logger.debug(
             "NHN_OBS_API_URL not set - OBS URL will be taken from token catalog if available"
         )
 
     start_http_server(config.EXPORTER_PORT)
-    logger.info("Prometheus metrics server started on :%d", config.EXPORTER_PORT)
+    logger.debug("Prometheus metrics server started on :%d", config.EXPORTER_PORT)
 
     try:
         token_mgr.get_token()

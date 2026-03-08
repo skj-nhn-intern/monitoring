@@ -151,7 +151,9 @@ services:
     environment:
       - EXPORTER_PORT=9101
       - SCRAPE_INTERVAL=60
-      - LOG_LEVEL=INFO
+      - LOG_LEVEL=WARNING
+      - LOG_RETENTION_DAYS=7
+      # 파일 로그 7일 보관(선택): LOG_DIR=/app/logs + volumes에 ./logs:/app/logs
       # NHN Cloud 인증 (필요 시 .env에 설정)
       - NHN_TENANT_ID=${NHN_TENANT_ID:-}
       - NHN_USERNAME=${NHN_USERNAME:-}
@@ -164,12 +166,13 @@ services:
       - NHN_RDS_APPKEY=${NHN_RDS_APPKEY:-}
       - NHN_RDS_SECRETKEY=${NHN_RDS_SECRETKEY:-}
     restart: always
+    # 디스크 부족 시 /tmp runc 임시파일 축적 완화: 주기 완화 + 가벼운 TCP 체크
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9101/metrics', timeout=5)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1',9101), timeout=3); s.close()"]
+      interval: 90s
+      timeout: 5s
+      retries: 2
+      start_period: 15s
     networks:
       - monitoring
 

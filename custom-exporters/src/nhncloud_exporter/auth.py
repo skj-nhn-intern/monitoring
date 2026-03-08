@@ -39,7 +39,7 @@ class OAuth2TokenManager:
         if not key or not secret:
             raise RuntimeError("NHN_LB_OAUTH2_KEY and NHN_LB_OAUTH2_SECRET required")
         url = config.NHN_OAUTH2_TOKEN_URL
-        logger.info("LB token: requesting OAuth2 token from %s", url)
+        logger.debug("LB token: requesting OAuth2 token from %s", url)
         basic = base64.b64encode(f"{key}:{secret}".encode()).decode()
         try:
             resp = requests.post(
@@ -92,7 +92,7 @@ class OAuth2TokenManager:
         self._token = data["access_token"]
         expires_in = int(data.get("expires_in", 86400))
         self._expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
-        logger.info("LB OAuth2 token refreshed, expires at %s", self._expires_at)
+        logger.debug("LB OAuth2 token refreshed, expires at %s", self._expires_at)
 
 
 oauth2_lb_mgr: Optional[OAuth2TokenManager] = None
@@ -164,7 +164,7 @@ class TokenManager:
             }
         }
         url = config.NHN_AUTH_URL
-        logger.info("LB token: requesting Keystone token from %s", url)
+        logger.debug("LB token: requesting Keystone token from %s", url)
         try:
             resp = requests.post(url, json=body, timeout=15)
         except requests.exceptions.ConnectionError as e:
@@ -212,7 +212,7 @@ class TokenManager:
             self._service_catalog = {
                 s["type"]: s for s in access.get("serviceCatalog", [])
             }
-            logger.info("Token refreshed, expires at %s", self._expires_at)
+            logger.debug("Token refreshed, expires at %s", self._expires_at)
         except KeyError as e:
             logger.error(
                 "LB Keystone: 응답 구조 예상과 다름 (access.token 등) – keys: %s, error: %s",

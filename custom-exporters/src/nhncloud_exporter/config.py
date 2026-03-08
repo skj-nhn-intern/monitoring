@@ -2,6 +2,7 @@
 
 import os
 import logging
+from logging.handlers import TimedRotatingFileHandler
 
 # Identity
 NHN_AUTH_URL = os.getenv(
@@ -72,7 +73,11 @@ OBS_HEALTH_CHECK_INTERVAL = int(os.getenv("OBS_HEALTH_CHECK_INTERVAL", "30"))
 # Exporter
 EXPORTER_PORT = int(os.getenv("EXPORTER_PORT", "9101"))
 SCRAPE_INTERVAL = int(os.getenv("SCRAPE_INTERVAL", "60"))
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+# 로그 최소화: 기본 WARNING. 상세 시 INFO 또는 DEBUG
+LOG_LEVEL = os.getenv("LOG_LEVEL", "WARNING")
+# 파일 로그 사용 시 디렉터리. 설정 시 해당 경로에 7일치만 보관
+LOG_DIR = os.getenv("LOG_DIR", "").strip()
+LOG_RETENTION_DAYS = int(os.getenv("LOG_RETENTION_DAYS", "7"))
 # Disable specific collectors (comma-separated: loadbalancer, cdn, rds) to avoid 401/404/DNS errors
 DISABLE_COLLECTORS = {
     s.strip().lower()
@@ -80,11 +85,42 @@ DISABLE_COLLECTORS = {
     if s.strip()
 }
 
+_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+
 
 def setup_logging() -> logging.Logger:
-    """Configure logging and return the exporter logger."""
-    logging.basicConfig(
-        level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    """Configure logging: 최소 출력(WARNING), 선택 시 파일 로그 7일 보관."""
+    level = getattr(logging, LOG_LEVEL.upper(), logging.WARNING)
+    root = logging.getLogger()
+    root.setLevel(level)
+    # 기본 핸들러 제거 후 우리가 추가
+    for h in list(root.handlers):
+        root.removeHandler(h)
+
+    fmt = logging.Formatter(_LOG_FORMAT)
+    # stderr: 최소 로깅
+    stderr = logging.StreamHandler()
+    stderr.setLevel(level)
+    stderr.setFormatter(fmt)
+    root.addHandler(stderr)
+
+    # LOG_DIR 설정 시 파일 로그, 7일치만 유지
+    if LOG_DIR:
+        try:
+            os.makedirs(LOG_DIR, exist_ok=True)
+            log_file = os.path.join(LOG_DIR, "exporter.log")
+            file_handler = TimedRotatingFileHandler(
+                log_file,
+                when="midnight",
+                interval=1,
+                backupCount=LOG_RETENTION_DAYS,
+                encoding="utf-8",
+            )
+            file_handler.suffix = "%Y-%m-%d"
+            file_handler.setLevel(level)
+            file_handler.setFormatter(fmt)
+            root.addHandler(file_handler)
+        except OSError:
+            pass  # LOG_DIR 쓰기 불가 시 파일 로깅 생략
+
     return logging.getLogger("nhncloud-exporter")
