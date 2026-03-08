@@ -12,7 +12,7 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
-      - --storage.tsdb.retention.time=14d
+      - --storage.tsdb.retention.time=14d  # 기본값 무제한, 14일로 제한
       - --web.enable-lifecycle
       - --web.enable-admin-api
     restart: always
@@ -212,7 +212,7 @@ configs:
         allow_structured_metadata: true
         reject_old_samples: true
         reject_old_samples_max_age: 168h
-        retention_period: 336h
+        retention_period: 168h  # 7일 보관
       compactor:
         working_directory: /loki/compactor
         retention_enabled: true
