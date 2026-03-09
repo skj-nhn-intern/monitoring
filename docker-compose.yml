@@ -217,7 +217,6 @@ configs:
         working_directory: /loki/compactor
         retention_enabled: true
         retention_delete_delay: 2h
-        delete_request_store: filesystem
 
   promtail_config:
     content: |
