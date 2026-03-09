@@ -185,14 +185,16 @@ configs:
       common:
         instance_addr: 127.0.0.1
         path_prefix: /loki
-        storage:
-          filesystem:
-            chunks_directory: /loki/chunks
-            rules_directory: /loki/rules
         replication_factor: 1
         ring:
           kvstore:
             store: inmemory
+      storage_config:
+        tsdb_shipper:
+          active_index_directory: /loki/index
+          cache_location: /loki/cache
+        filesystem:
+          directory: /loki/chunks
       query_range:
         results_cache:
           cache:
@@ -212,7 +214,7 @@ configs:
         allow_structured_metadata: true
         reject_old_samples: true
         reject_old_samples_max_age: 168h
-        retention_period: 168h  # 7일 보관
+        retention_period: 168h
       compactor:
         working_directory: /loki/compactor
         retention_enabled: true
