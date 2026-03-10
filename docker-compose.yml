@@ -18,6 +18,7 @@ services:
     restart: always
     networks:
       - monitoring
+      
 
   # 2. Pushgateway (단기/배치 작업 메트릭 수집)
   pushgateway:
@@ -278,12 +279,6 @@ configs:
               labels:
                 job: varlogs
                 __path__: /var/log/*log
-        - job_name: 'node-exporter'
-          static_configs:
-            - targets: ['node-exporter:9100']
-        - job_name: 'cadvisor'
-          static_configs:
-            - targets: ['cadvisor:8080']
 
 networks:
   monitoring:

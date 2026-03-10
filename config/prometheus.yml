@@ -34,7 +34,13 @@ scrape_configs:
     static_configs:
       - targets:
           - nhn-cloud-exporter:9101
+  - job_name: node-exporter
+    static_configs:
+      - targets: ['node-exporter:9100']
 
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
   # 필요 시 추가 타겟 (Grafana, Loki 등)
   # - job_name: grafana
   #   static_configs:
